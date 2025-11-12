@@ -1,0 +1,13 @@
+lower_controrller_time_config\heap_4.o: FreeRTOS\portable\MemMang\heap_4.c
+lower_controrller_time_config\heap_4.o: E:\KEIL_V5\ARM\ARMCC\Bin\..\include\stdlib.h
+lower_controrller_time_config\heap_4.o: ./FreeRTOS/include/FreeRTOS.h
+lower_controrller_time_config\heap_4.o: E:\KEIL_V5\ARM\ARMCC\Bin\..\include\stddef.h
+lower_controrller_time_config\heap_4.o: E:\KEIL_V5\ARM\ARMCC\Bin\..\include\stdint.h
+lower_controrller_time_config\heap_4.o: ./FreeRTOS/include/FreeRTOSConfig.h
+lower_controrller_time_config\heap_4.o: ./FreeRTOS/include/projdefs.h
+lower_controrller_time_config\heap_4.o: ./FreeRTOS/include/portable.h
+lower_controrller_time_config\heap_4.o: ./FreeRTOS/include/deprecated_definitions.h
+lower_controrller_time_config\heap_4.o: ./FreeRTOS/portable/RVDS/ARM_CM4F/portmacro.h
+lower_controrller_time_config\heap_4.o: ./FreeRTOS/include/mpu_wrappers.h
+lower_controrller_time_config\heap_4.o: ./FreeRTOS/include/task.h
+lower_controrller_time_config\heap_4.o: ./FreeRTOS/include/list.h
