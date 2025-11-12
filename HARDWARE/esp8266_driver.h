@@ -111,6 +111,7 @@ void Process_Multiple_IPD_Packets(char* data_start, uint32_t data_length);
 // 在函数声明部分添加
 void ESP8266_PrintRawData(const char* data, uint32_t length);
 void ESP8266_Debug_PrintBuffer(void);
+// 目前还未继续完善，后续会根据需要继续添加功能
 
 #endif
 
