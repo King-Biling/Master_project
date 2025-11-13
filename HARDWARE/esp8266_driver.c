@@ -915,7 +915,7 @@ void Process_Control_Command(const char* command)
             ctrl_ptr = strstr(command, "CTRL:");
         }
         
-        // 解析指令
+        // 解析指令  
         if(sscanf(ctrl_ptr, "CTRL:%[^,],TARGET:%f,%f,%f", 
                   target_car, &target_x, &target_y, &target_yaw) == 4) {
             
