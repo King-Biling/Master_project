@@ -736,11 +736,6 @@ void Process_Compact_Broadcast(const char* data)
         return;
     }
     
-    // debug_print("[广播] ? 数据格式基本正确，有起始和结束标记\r\n");
-    
-    // 新数据格式: [数量 CAR1 x y 航向角 vx vy vz CAR2 ...] （去掉电压数据）
-    // 示例: [4 CAR1 1.21 2.32 78.5 0.120 0.080 0.050 CAR2 2.21 3.32 38.2 1.120 4.900 0.080 CAR3 3.33 3.33 33.3 0.333 0.333 0.033 CAR4 4.44 4.44 44.4 0.444 0.444 0.044]
-    
     // 跳过开头的'['
     const char* ptr = data + 1;
     
@@ -1192,6 +1187,15 @@ void Process_Multiple_IPD_Packets(char* data_start, uint32_t data_length)
 
 void ESP8266_Process(void)
 {
+    // 新增：如果数据量很大，只处理最新的一部分
+    if(esp8266_rx_index > 200) {
+        // 保留最后100字节，丢弃旧数据
+        uint16_t keep_bytes = 100;
+        uint16_t discard_bytes = esp8266_rx_index - keep_bytes;
+        memmove(esp8266_rx_buffer, esp8266_rx_buffer + discard_bytes, keep_bytes);
+        esp8266_rx_index = keep_bytes;
+    }
+    
     if(esp8266_rx_index > 0) {
         esp8266_rx_buffer[esp8266_rx_index] = '\0';
         
