@@ -337,73 +337,90 @@ void Process_Formation_Command(const char* command)
 {
     char debug_msg[256];
     
-    // 首先打印接收到的原始指令
-    snprintf(debug_msg, sizeof(debug_msg), 
-             "[编队] 收到指令: %s\r\n", command);
-    debug_print(debug_msg);
+    // // 首先打印接收到的原始指令
+    // snprintf(debug_msg, sizeof(debug_msg), 
+    //          "[编队] 收到指令: %s\r\n", command);
+    // debug_print(debug_msg);
     
-    // 检查编队停止指令
-    if (strstr(command, "FORMATION:STOP") != NULL) {
-        Formation_mode = FORMATION_MODE_NONE;
-        Formation_leader[0] = '\0';
+    // 检查新格式 [F,...]
+    if(command[0] == '[' && strstr(command, "F,") != NULL) {
+        char cmd_type[2];
+        char leader_id[16];
+        char formation_type[20];
+        float offset_x, offset_y, offset_yaw;
         
-        snprintf(debug_msg, sizeof(debug_msg), 
-                 "[编队] 停止编队控制\r\n");
-        debug_print(debug_msg);
+        // 解析指令类型
+        if(sscanf(command, "[F,%1s", cmd_type) == 1) {
+            switch(cmd_type[0]) {
+                case 'T': // 停止编队 [F,T]
+                    Formation_mode = FORMATION_MODE_NONE;
+                    Formation_leader[0] = '\0';
+                    debug_print("[编队] 停止编队控制\r\n");
+                    break;
+                    
+                case 'S': // 开始编队 [F,S,CAR1,line]
+                    if(sscanf(command, "[F,S,%[^,],%s", leader_id, formation_type) == 2) {
+                        debug_print("[编队] 收到开始编队指令\r\n");
+                        // 这里可以记录队形类型，等待后续角色指令
+                    }
+                    break;
+                    
+                case 'L': // 设置领航者 [F,L,CAR1]
+                    if(sscanf(command, "[F,L,%s", leader_id) == 1) {
+                        Formation_mode = FORMATION_MODE_LEADER;
+                        strcpy(Formation_leader, CAR_ID);
+                        Auto_mode = 1;
+                        snprintf(debug_msg, sizeof(debug_msg), 
+                                 "[编队] 设置为领航者\r\n");
+                        debug_print(debug_msg);
+                    }
+                    break;
+                    
+                case 'F': // 设置跟随者 [F,F,CAR1,0.5,0.0,0.0]
+                    if(sscanf(command, "[F,F,%[^,],%f,%f,%f", 
+                               leader_id, &offset_x, &offset_y, &offset_yaw) == 4) {
+                        Formation_mode = FORMATION_MODE_FOLLOWER;
+                        strcpy(Formation_leader, leader_id);
+                        Formation_offset_x = offset_x;
+                        Formation_offset_y = offset_y;
+                        Formation_offset_yaw = offset_yaw;
+                        Auto_mode = 1;
+                        
+                        snprintf(debug_msg, sizeof(debug_msg), 
+                                 "[编队] 设置为跟随者，领航者:%s 偏移(%.2f,%.2f,%.1f)\r\n", 
+                                 leader_id, offset_x, offset_y, offset_yaw);
+                        debug_print(debug_msg);
+                    }
+                    break;
+                    
+                case 'U': // 更新偏移 [F,U,CAR1,0.3,0.2,0.0]
+                    if(sscanf(command, "[F,U,%[^,],%f,%f,%f", 
+                               leader_id, &offset_x, &offset_y, &offset_yaw) == 4) {
+                        // 检查是否是本车跟随的领航者
+                        if(Formation_mode == FORMATION_MODE_FOLLOWER && 
+                           strcmp(leader_id, Formation_leader) == 0) {
+                            Formation_offset_x = offset_x;
+                            Formation_offset_y = offset_y;
+                            Formation_offset_yaw = offset_yaw;
+                            
+                            snprintf(debug_msg, sizeof(debug_msg), 
+                                     "[编队] 更新偏移量 (%.2f,%.2f,%.1f)\r\n", 
+                                     offset_x, offset_y, offset_yaw);
+                            debug_print(debug_msg);
+                        }
+                    }
+                    break;
+                    
+                default:
+                    snprintf(debug_msg, sizeof(debug_msg), 
+                             "[编队] 未知编队指令类型: %c\r\n", cmd_type[0]);
+                    debug_print(debug_msg);
+                    break;
+            }
+        }
         return;
     }
     
-    // 原有的编队指令处理逻辑保持不变
-    if (strstr(command, "FORMATION:LEADER") != NULL) {
-        // 设置为领航者
-        Formation_mode = FORMATION_MODE_LEADER;
-        strcpy(Formation_leader, CAR_ID);
-        Auto_mode = 1; // 启用自动模式
-        
-        // 解析队形类型
-        char formation_type[20];
-        if (sscanf(command, "FORMATION:LEADER,%s", formation_type) == 1) {
-            snprintf(debug_msg, sizeof(debug_msg), 
-                     "[编队] 设置为领航者，队形:%s\r\n", formation_type);
-        } else {
-            snprintf(debug_msg, sizeof(debug_msg), 
-                     "[编队] 设置为领航者\r\n");
-        }
-        debug_print(debug_msg);
-    }
-    else if (strstr(command, "FORMATION:FOLLOWER") != NULL) {
-        // 设置为跟随者
-        char leader_id[10];
-        float offset_x, offset_y, offset_yaw;
-        
-        if (sscanf(command, "FORMATION:FOLLOWER,%[^,],%f,%f,%f", 
-                   leader_id, &offset_x, &offset_y, &offset_yaw) == 4) {
-            Formation_mode = FORMATION_MODE_FOLLOWER;
-            strcpy(Formation_leader, leader_id);
-            Formation_offset_x = offset_x;
-            Formation_offset_y = offset_y;
-            Formation_offset_yaw = offset_yaw;
-            Auto_mode = 1; // 启用自动模式
-            
-            snprintf(debug_msg, sizeof(debug_msg), 
-                     "[编队] 设置为跟随者，领航者:%s 偏移(%.2f,%.2f,%.1f)\r\n", 
-                     leader_id, offset_x, offset_y, offset_yaw);
-            debug_print(debug_msg);
-        } else {
-            snprintf(debug_msg, sizeof(debug_msg), 
-                     "[编队] 跟随者指令解析失败\r\n");
-            debug_print(debug_msg);
-        }
-    }
-    else if (strstr(command, "FORMATION:UPDATE") != NULL) {
-        // 更新编队偏移量
-        Process_Formation_Update(command);
-    }
-    else {
-        snprintf(debug_msg, sizeof(debug_msg), 
-                 "[编队] 未知编队指令: %s\r\n", command);
-        debug_print(debug_msg);
-    }
 }
 
 /**************************************************************************

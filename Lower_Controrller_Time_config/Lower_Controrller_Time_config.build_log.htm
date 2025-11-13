@@ -27,38 +27,38 @@ Project File Date:  10/21/2025
 <h2>Output:</h2>
 *** Using Compiler 'V5.06 update 5 (build 528)', folder: 'E:\KEIL_V5\ARM\ARMCC\Bin'
 Build target 'Lower_Controrller'
+compiling formation_control.c...
+Balance\formation_control.h(52): warning:  #1-D: last line of file ends without a newline
+  #endif
+Balance\formation_control.c(22): warning:  #47-D: incompatible redefinition of macro "ZERO_VELOCITY_COUNT_THRESHOLD"  (declared at line 20 of "Balance\formation_control.h")
+  #define ZERO_VELOCITY_COUNT_THRESHOLD 4  // 连续零速度计数阈值
+Balance\formation_control.c(23): warning:  #47-D: incompatible redefinition of macro "MOVING_AVERAGE_SIZE"  (declared at line 21 of "Balance\formation_control.h")
+  #define MOVING_AVERAGE_SIZE 1             // 移动平均窗口大小
+Balance\formation_control.c(453): warning:  #1-D: last line of file ends without a newline
+  }
+Balance\formation_control.c(38): warning:  #177-D: variable "speed_following_mode"  was declared but never referenced
+  static uint8_t speed_following_mode = 0;  // 速度跟随模式标志
+Balance\formation_control.c: 5 warnings, 0 errors
 compiling esp8266_driver.c...
 ./Balance/formation_control.h(52): warning:  #1-D: last line of file ends without a newline
   #endif
-HARDWARE\esp8266_driver.c(721): warning:  #177-D: variable "debug_raw"  was declared but never referenced
+HARDWARE\esp8266_driver.c(702): warning:  #177-D: variable "debug_raw"  was declared but never referenced
       char debug_raw[256];
-HARDWARE\esp8266_driver.c(756): warning:  #177-D: variable "count_msg"  was declared but never referenced
+HARDWARE\esp8266_driver.c(732): warning:  #177-D: variable "count_msg"  was declared but never referenced
       char count_msg[32];
-HARDWARE\esp8266_driver.c(902): warning:  #177-D: variable "debug_msg"  was declared but never referenced
-      char debug_msg[256];
-HARDWARE\esp8266_driver.c(1105): warning:  #177-D: variable "debug_msg"  was declared but never referenced
-                      char debug_msg[128];
-HARDWARE\esp8266_driver.c(1163): warning:  #177-D: variable "debug_msg"  was declared but never referenced
-                          char debug_msg[128];
-HARDWARE\esp8266_driver.c(1189): warning:  #177-D: variable "result_msg"  was declared but never referenced
-      char result_msg[64];
-HARDWARE\esp8266_driver.c(1216): warning:  #177-D: variable "count_msg"  was declared but never referenced
-              char count_msg[64];
-HARDWARE\esp8266_driver.c(1256): warning:  #177-D: variable "unknown_msg"  was declared but never referenced
+HARDWARE\esp8266_driver.c(1199): warning:  #177-D: variable "unknown_msg"  was declared but never referenced
                                   char unknown_msg[32];
-HARDWARE\esp8266_driver.c(1234): warning:  #177-D: variable "link_msg"  was declared but never referenced
-                      char link_msg[64];
-HARDWARE\esp8266_driver.c(1282): warning:  #177-D: variable "manual_msg"  was declared but never referenced
+HARDWARE\esp8266_driver.c(1225): warning:  #177-D: variable "manual_msg"  was declared but never referenced
                                   char manual_msg[64];
-HARDWARE\esp8266_driver.c(1436): warning:  #1-D: last line of file ends without a newline
+HARDWARE\esp8266_driver.c(1379): warning:  #1-D: last line of file ends without a newline
   }
 HARDWARE\esp8266_driver.c(21): warning:  #550-D: variable "last_successful_communication"  was set but never used
   static uint32_t last_successful_communication = 0;
-HARDWARE\esp8266_driver.c: 13 warnings, 0 errors
+HARDWARE\esp8266_driver.c: 7 warnings, 0 errors
 linking...
-Program Size: Code=65732 RO-data=9720 RW-data=692 ZI-data=26356  
+Program Size: Code=65092 RO-data=9648 RW-data=692 ZI-data=26356  
 FromELF: creating hex file...
-"Lower_Controrller_Time_config\Lower_Controrller_Time_config.axf" - 0 Error(s), 13 Warning(s).
+"Lower_Controrller_Time_config\Lower_Controrller_Time_config.axf" - 0 Error(s), 12 Warning(s).
 
 <h2>Software Packages used:</h2>
 
@@ -81,7 +81,7 @@ Package Vendor: Keil
 <h2>Collection of Component Files used:</h2>
 
    * Component: ARM::CMSIS:CORE:5.0.1
-Build Time Elapsed:  00:00:04
+Build Time Elapsed:  00:00:03
 </pre>
 </body>
 </html>

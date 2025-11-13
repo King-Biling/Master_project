@@ -130,80 +130,63 @@ uint8_t Should_Process_Car_Info(const char* car_id)
     // 所以我们要检查：目标车能否发送给本车？即 A[target_index][car_index] == 1?
     uint8_t result = communication_topology[target_index][car_index];
     
-    // // 详细的调试信息
-    // char debug_msg[256];
-    // snprintf(debug_msg, sizeof(debug_msg), 
-    //          "[拓扑] 检查通信权限:\r\n"
-    //          "[拓扑]   本车: %s (索引%d)\r\n"
-    //          "[拓扑]   目标车: %s (索引%d)\r\n"
-    //          "[拓扑]   矩阵检查: communication_topology[%d][%d] = %d\r\n"
-    //          "[拓扑]   结果: %s\r\n",
-    //          CAR_ID, car_index,
-    //          car_id, target_index,
-    //          target_index, car_index, communication_topology[target_index][car_index],
-    //          result ? "允许接收" : "禁止接收");
-    // debug_print(debug_msg);
-    
     return result;
 }
 
 
 void Process_Topology_Command(const char* command)
 {
-    // 格式: "TOPOLOGY_TOGGLE:1" 或 "TOPOLOGY_TOGGLE:0" 或 "TOPOLOGY_TOGGLE:True/False"
-    const char* toggle_ptr = strstr(command, "TOPOLOGY_TOGGLE:");
-    if(toggle_ptr != NULL) {
-        toggle_ptr += 16;  // 跳过"TOPOLOGY_TOGGLE:"
+    char debug_msg[128];
+    // 检查新格式 [T,...]
+    if(command[0] == '[' && strstr(command, "T,") != NULL) {
+        char cmd_type[2];
+        int enable;
+        int topology_matrix[16];
+        int parsed_count;
         
-        // 处理布尔值 True/False 或 1/0
-        if (strstr(toggle_ptr, "True") != NULL || (toggle_ptr[0] == '1' && (toggle_ptr[1] == '\0' || toggle_ptr[1] == '\r' || toggle_ptr[1] == '\n'))) {
-            topology_enabled = 1;
-            debug_print("[拓扑] 拓扑功能已启用\r\n");
-        } else if (strstr(toggle_ptr, "False") != NULL || (toggle_ptr[0] == '0' && (toggle_ptr[1] == '\0' || toggle_ptr[1] == '\r' || toggle_ptr[1] == '\n'))) {
-            topology_enabled = 0;
-            debug_print("[拓扑] 拓扑功能已禁用\r\n");
-        } 
+        // 解析指令类型
+        if(sscanf(command, "[T,%1s", cmd_type) == 1) {
+            switch(cmd_type[0]) {
+                case 'E': // 切换拓扑功能 [T,E,1]
+                    if(sscanf(command, "[T,E,%d", &enable) == 1) {
+                        topology_enabled = enable ? 1 : 0;
+                        snprintf(debug_msg, sizeof(debug_msg), 
+                                 "[拓扑] 拓扑功能已%s\r\n", 
+                                 topology_enabled ? "启用" : "禁用");
+                        debug_print(debug_msg);
+                    }
+                    break;
+                    
+                case 'M': // 设置拓扑矩阵 [T,M,1,1,1,1,1,0,1,1,1,1,0,1,1,1,1,0]
+                    parsed_count = sscanf(command, "[T,M,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
+                                         &topology_matrix[0], &topology_matrix[1], &topology_matrix[2], &topology_matrix[3],
+                                         &topology_matrix[4], &topology_matrix[5], &topology_matrix[6], &topology_matrix[7],
+                                         &topology_matrix[8], &topology_matrix[9], &topology_matrix[10], &topology_matrix[11],
+                                         &topology_matrix[12], &topology_matrix[13], &topology_matrix[14], &topology_matrix[15]);
+                    
+                    if(parsed_count == 16) {
+                        // 自动启用拓扑功能
+                        topology_enabled = 1;
+                        
+                        // 更新拓扑矩阵
+                        for(int i = 0; i < 4; i++) {
+                            for(int j = 0; j < 4; j++) {
+                                communication_topology[i][j] = topology_matrix[i*4 + j];
+                            }
+                        }
+                        
+                        debug_print("[拓扑] 拓扑矩阵更新完成\r\n");
+                    }
+                    break;
+                    
+                default:
+                    debug_print("[拓扑] 未知拓扑指令类型\r\n");
+                    break;
+            }
+        }
         return;
     }
     
-    // 格式: "TOPOLOGY:1,1,1,1;1,0,1,0;1,1,0,1;1,0,1,0"
-    const char* topology_ptr = strstr(command, "TOPOLOGY:");
-    if(topology_ptr != NULL) {
-        topology_ptr += 9;  // 跳过"TOPOLOGY:"
-        
-        // 自动启用拓扑功能
-        topology_enabled = 1;
-        
-        // 复制拓扑字符串进行处理
-        char topology_str[128];
-        strncpy(topology_str, topology_ptr, sizeof(topology_str)-1);
-        topology_str[sizeof(topology_str)-1] = '\0';
-        
-        // 移除可能的换行符和回车符
-        char* newline = strchr(topology_str, '\r');
-        if (newline) *newline = '\0';
-        newline = strchr(topology_str, '\n');
-        if (newline) *newline = '\0';
-        
-        Update_Topology_Matrix(topology_str);
-        return;
-    }
-    
-    // 格式: "TOPOLOGY:START" 或 "TOPOLOGY:ENABLE" - 启用拓扑
-    if (strstr(command, "TOPOLOGY:START") != NULL || strstr(command, "TOPOLOGY:ENABLE") != NULL) {
-        topology_enabled = 1;
-        debug_print("[拓扑] 拓扑功能已启用\r\n");
-        return;
-    }
-    
-    // 格式: "TOPOLOGY:STOP" 或 "TOPOLOGY:DISABLE" - 禁用拓扑
-    if (strstr(command, "TOPOLOGY:STOP") != NULL || strstr(command, "TOPOLOGY:DISABLE") != NULL) {
-        topology_enabled = 0;
-        debug_print("[拓扑] 拓扑功能已禁用\r\n");
-        return;
-    }
-    
-    debug_print("[拓扑] 未知拓扑指令格式\r\n");
 }
 
 void Update_Topology_Matrix(const char* topology_str)
@@ -820,130 +803,126 @@ void Process_Compact_Broadcast(const char* data)
 
 void Process_Broadcast_Data(const char* data)
 {
-    // 首先检查是否为拓扑指令
+    // 首先检查是否为新的精简格式指令 [字母,...]
+    if (data[0] == '[' && strchr(data, ']') != NULL) {
+        // 检查是否为指令（控制、编队、拓扑）
+        if (data[1] == 'C' || data[1] == 'F' || data[1] == 'T') {
+            // 这是精简格式的指令
+            char cmd_type = data[1];
+            
+            switch(cmd_type) {
+                case 'C': // 控制指令 [C,...]
+                    debug_print("[广播] 检测到控制指令，转发给控制处理函数\r\n");
+                    Process_Control_Command(data);
+                    break;
+                case 'F': // 编队指令 [F,...]
+                    debug_print("[广播] 检测到编队指令，转发给编队处理函数\r\n");
+                    Process_Formation_Command(data);
+                    break;
+                case 'T': // 拓扑指令 [T,...]
+                    debug_print("[广播] 检测到拓扑指令，转发给拓扑处理函数\r\n");
+                    Process_Topology_Command(data);
+                    break;
+                default:
+                    debug_print("[广播] 未知精简指令格式\r\n");
+                    break;
+            }
+            return;
+        } else {
+            // 这是广播数据格式 [数字 ...]
+            Process_Compact_Broadcast(data);
+            return;
+        }
+    }
+    
+    // 兼容旧格式的指令检查
+    // 检查是否为拓扑指令
     if (strstr(data, "TOPOLOGY") != NULL) {
-        debug_print("[广播] 检测到拓扑指令，转发给拓扑处理函数\r\n");
+        debug_print("[广播] 检测到拓扑指令(旧格式)，转发给拓扑处理函数\r\n");
         Process_Topology_Command(data);
         return;
     }
     
     // 检查是否为编队指令
     if (strstr(data, "FORMATION") != NULL) {
-        debug_print("[广播] 检测到编队指令，转发给编队处理函数\r\n");
+        debug_print("[广播] 检测到编队指令(旧格式)，转发给编队处理函数\r\n");
         Process_Formation_Command(data);
         return;
     }
     
-    // 检查是否为新的精简合并格式
-    if (data[0] == '[' && strchr(data, ']') != NULL) {
-        Process_Compact_Broadcast(data);
+    // 检查是否为控制指令
+    if (strstr(data, "CTRL:") != NULL) {
+        debug_print("[广播] 检测到控制指令(旧格式)，转发给控制处理函数\r\n");
+        Process_Control_Command(data);
+        return;
     }
+    
     // 原有的JSON格式处理
-    else if (strstr(data, "\"type\":\"broadcast_single\"") != NULL) {
+    if (strstr(data, "\"type\":\"broadcast_single\"") != NULL) {
         const char* json_start = strstr(data, "{");
         if (json_start != NULL) {
             Process_Segmented_Broadcast(json_start);
+            return;
         }
     }
-    else {
-        // 尝试其他格式
-        debug_print("[广播] 未知广播数据格式，尝试通用处理\r\n");
-        
-        // 再次检查是否为拓扑或编队指令（可能有前缀）
-        if (strstr(data, "TOPOLOGY") != NULL) {
-            Process_Topology_Command(data);
-        }
-        else if (strstr(data, "FORMATION") != NULL) {
-            Process_Formation_Command(data);
-        }
-        else {
-            debug_print("[广播] 无法识别的广播数据格式\r\n");
-        }
+    
+    // 如果都不是，尝试作为未知格式处理
+    debug_print("[广播] 未知广播数据格式\r\n");
+    
+    // 最后尝试通用处理
+    if (data[0] == '[') {
+        // 可能是广播数据但格式不标准
+        Process_Compact_Broadcast(data);
     }
 }
 
 // 处理单播数据（控制指令、编队指令、拓扑指令等）
 void Process_Unicast_Data(const char* data)
 {
-    // debug_print("[单播] 处理单播数据\r\n");
-    
-    // 检查数据是否为编队指令
-    if(strstr(data, "FORMATION:") != NULL) {
-        debug_print("[单播] 检测到编队指令\r\n");
-        Process_Formation_Command(data);
-    }
-    
-    // 检查控制命令
-    else if(strstr(data, "CTRL:") != NULL) {
-        debug_print("[单播] 检测到控制命令\r\n");
-        Process_Control_Command(data);
-    }
-    // 检查拓扑指令
-    else if(strstr(data, "TOPOLOGY") != NULL) {
-        debug_print("[单播] 检测到拓扑指令\r\n");
-        Process_Topology_Command(data);
-    }
-    else {
-        debug_print("[单播] 未知单播数据格式\r\n");
+    // 检查是否为精简格式 [字母,...]
+    if(data[0] == '[') {
+        char cmd_type = data[1]; // 第一个字母代表指令类型
+        
+        switch(cmd_type) {
+            case 'C': // 控制指令 [C,...]
+                Process_Control_Command(data);
+                break;
+            case 'F': // 编队指令 [F,...]
+                Process_Formation_Command(data);
+                break;
+            case 'T': // 拓扑指令 [T,...]
+                Process_Topology_Command(data);
+                break;
+            default:
+                // 未知指令类型
+                break;
+        }
+        return;
     }
 }
 
 // 控制命令处理函数 - 确保与wifi_task.c中的定义一致
 void Process_Control_Command(const char* command)
 {
-    // 打印原始指令用于调试
-    char debug_msg[256];
-    // snprintf(debug_msg, sizeof(debug_msg), 
-    //          "[WiFi] 收到原始指令: %s\r\n", command);
-    // debug_print(debug_msg);
-    
-    // 解析控制命令格式: "CTRL:CAR1,TARGET:1.5,2.3,45.0"
-    // 或者 "+IPD,0,31:CTRL:CAR1,TARGET:0.00,0.00,0.0"
-    const char* ctrl_ptr = strstr(command, "CTRL:");
-    if(ctrl_ptr != NULL) {
+    if(command[0] == '[' && strstr(command, "C,") != NULL) {
         char target_car[16];
         float target_x, target_y, target_yaw;
         
-        // 跳过可能的IPD前缀
-        if(ctrl_ptr != command) {
-            // 找到CTRL:之后的位置
-            ctrl_ptr = strstr(command, "CTRL:");
-        }
-        
-        // 解析指令  
-        if(sscanf(ctrl_ptr, "CTRL:%[^,],TARGET:%f,%f,%f", 
+        // 解析格式: [C,CAR1,1.5,2.3,45.0]
+        if(sscanf(command, "[C,%[^,],%f,%f,%f", 
                   target_car, &target_x, &target_y, &target_yaw) == 4) {
             
             // 检查是否是发给本车的命令
             if(strcmp(target_car, CAR_ID) == 0) {
-                // snprintf(debug_msg, sizeof(debug_msg), 
-                //          "[控制] 目标位置(%.2f, %.2f), 航向%.1f\r\n", 
-                //          target_x, target_y, target_yaw);
-                // debug_print(debug_msg);
-                
-                // 设置目标位置和航向
                 Target_position[0] = target_x;
                 Target_position[1] = target_y;
                 Target_Yaw = target_yaw;
                 newCoordinateReceived = 1;
                 Auto_mode = 1;
-                
-                // 重置位置到达标志
                 position_reached = 0;
-                
-                // snprintf(debug_msg, sizeof(debug_msg), 
-                //          "[控制] 已设置自动模式，准备导航\r\n");
-                // debug_print(debug_msg);
-            } else {
-                // snprintf(debug_msg, sizeof(debug_msg), 
-                //          "[控制] 指令不是发给本车(%s)，忽略\r\n", CAR_ID);
-                // debug_print(debug_msg);
             }
-        } else {
-            // debug_print("[控制] 指令格式解析失败\r\n");
         }
-    } else {
-        // debug_print("[控制] 未找到CTRL指令\r\n");
+        return;
     }
 }
 
@@ -1095,25 +1074,12 @@ void Process_Multiple_IPD_Packets(char* data_start, uint32_t data_length)
                     strncpy(temp_packet, packet_data_start, copy_len);
                     temp_packet[copy_len] = '\0';
                     
-                    char debug_msg[128];
-                    // snprintf(debug_msg, sizeof(debug_msg), 
-                    //          "[多包] 处理粘连包 %d: ID=%d, Len=%d, Data=%.*s\r\n", 
-                    //          processed_packets + 1, link_id, data_len, 30, temp_packet);
-                    // debug_print(debug_msg);
-                    
                     // 在多包处理函数中，修改数据处理部分：
                     if (link_id == 0) {
-                        // debug_print("[多包] 处理单播数据\r\n");
+                        // 单播数据：可能是控制指令或编队指令
                         Process_Unicast_Data(temp_packet);
                     } else if (link_id == 1) {
-                        // debug_print("[多包] 处理广播数据\r\n");
-                        
-                        // 特别处理截断的拓扑数据
-                        if (strstr(temp_packet, "TOPOLOGY:") != NULL && data_len == 40) {
-                            // debug_print("[多包] 检测到可能被截断的拓扑数据，尝试特殊处理\r\n");
-                            // 这里可以添加逻辑来组合多个包，或者记录不完整的数据
-                        }
-                        
+                        // 广播数据：可能是广播数据或广播指令                        
                         Process_Broadcast_Data(temp_packet);
                     }
                     
@@ -1123,15 +1089,9 @@ void Process_Multiple_IPD_Packets(char* data_start, uint32_t data_length)
                     current_ptr = packet_data_start + data_len;
                     remaining_length = data_length - (current_ptr - data_start);
                     continue;
-                } else {
-                    // debug_print("[多包] 数据长度超出缓冲区范围\r\n");
-                }
-            } else {
-                // debug_print("[多包] 未找到冒号分隔符\r\n");
-            }
-        } else {
-            // debug_print("[多包] 解析+IPD格式失败\r\n");
-        }
+                } 
+            } 
+        } 
         
         // 如果解析失败，尝试备用解析
         char* comma1 = strchr(ipd_ptr, ',');
@@ -1153,12 +1113,6 @@ void Process_Multiple_IPD_Packets(char* data_start, uint32_t data_length)
                         strncpy(temp_packet, packet_data_start, copy_len);
                         temp_packet[copy_len] = '\0';
                         
-                        char debug_msg[128];
-                        // snprintf(debug_msg, sizeof(debug_msg), 
-                        //          "[多包] 手动解析包 %d: ID=%d, Len=%d\r\n", 
-                        //          processed_packets + 1, link_id, data_len);
-                        // debug_print(debug_msg);
-                        
                         if (link_id == 0) {
                             Process_Unicast_Data(temp_packet);
                         } else if (link_id == 1) {
@@ -1179,10 +1133,6 @@ void Process_Multiple_IPD_Packets(char* data_start, uint32_t data_length)
         remaining_length = data_length - (current_ptr - data_start);
     }
     
-    char result_msg[64];
-    // snprintf(result_msg, sizeof(result_msg), 
-    //          "[多包] 处理完成，共处理 %d 个包\r\n", processed_packets);
-    // debug_print(result_msg);
 }
 
 void ESP8266_Process(void)
@@ -1195,7 +1145,7 @@ void ESP8266_Process(void)
         memmove(esp8266_rx_buffer, esp8266_rx_buffer + discard_bytes, keep_bytes);
         esp8266_rx_index = keep_bytes;
     }
-    
+
     if(esp8266_rx_index > 0) {
         esp8266_rx_buffer[esp8266_rx_index] = '\0';
         
@@ -1215,10 +1165,6 @@ void ESP8266_Process(void)
         }
         
         if(ipd_count > 1) {
-            char count_msg[64];
-            // snprintf(count_msg, sizeof(count_msg), 
-            //          "[多包] 检测到 %d 个粘连的IPD包\r\n", ipd_count);
-            // debug_print(count_msg);
             
             // 使用多包处理函数
             Process_Multiple_IPD_Packets(data_start, data_length);
@@ -1232,12 +1178,7 @@ void ESP8266_Process(void)
                 int data_len = 0;
                 
                 // 解析格式: +IPD,<link_id>,<data_len>:<data>
-                if(sscanf(ipd_ptr, "+IPD,%d,%d:", &link_id, &data_len) == 2) {
-                    char link_msg[64];
-                    // snprintf(link_msg, sizeof(link_msg), 
-                    //          "[WiFi] 解析成功: 连接ID=%d, 数据长度=%d\r\n", link_id, data_len);
-                    // debug_print(link_msg);
-                    
+                if(sscanf(ipd_ptr, "+IPD,%d,%d:", &link_id, &data_len) == 2) {                   
                     // 找到冒号位置
                     char* colon_ptr = strchr(ipd_ptr, ':');
                     if(colon_ptr != NULL) {
