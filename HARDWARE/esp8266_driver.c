@@ -698,24 +698,16 @@ void Process_Segmented_Broadcast(const char* json_data)
 // 处理精简合并广播数据（新格式：去掉电压数据）
 void Process_Compact_Broadcast(const char* data)
 {    
-    // 打印原始数据用于调试
-    char debug_raw[256];
-    int data_len = strlen(data);
-    // snprintf(debug_raw, sizeof(debug_raw), "[广播] 原始数据(%d字节): %s\r\n", data_len, data);
-    // debug_print(debug_raw);
-    
-    // 详细分析数据格式
-    // debug_print("[广播] 数据分析:\r\n");
+    static uint32_t last_update_time = 0;
+    uint32_t current_time = HAL_GetTick();
     
     // 检查数据起始和结束标记
     if(data[0] != '[') {
-        // debug_print("[广播] ? 数据不是以'['开头\r\n");
         return;
     }
     
     char* end_bracket = strchr(data, ']');
     if(end_bracket == NULL) {
-        // debug_print("[广播] ? 数据没有以']'结尾\r\n");
         return;
     }
     
@@ -725,36 +717,29 @@ void Process_Compact_Broadcast(const char* data)
     // 解析小车数量
     int car_count = 0;
     if (sscanf(ptr, "%d", &car_count) != 1) {
-        // debug_print("[广播] ? 解析小车数量失败\r\n");
         return;
     }
     
-    char count_msg[32];
-    // snprintf(count_msg, sizeof(count_msg), "[广播] ? 小车数量: %d\r\n", car_count);
-    // debug_print(count_msg);
-    
     if (car_count <= 0 || car_count > MAX_OTHER_CARS) {
-        // debug_print("[广播] ? 小车数量无效\r\n");
         return;
     }
     
     // 移动到数量后的空格
     ptr = strchr(ptr, ' ');
     if (ptr == NULL) {
-        // debug_print("[广播] ? 数据格式错误，找不到数量后的空格\r\n");
         return;
     }
     ptr++; // 跳过空格
     
-    // 解析每辆小车的数据（现在每个小车有7个字段，去掉电压）
+    // 解析每辆小车的数据
     int processed_cars = 0;
     for (int i = 0; i < car_count; i++) {
         char short_id[4] = {0};  // C1, C2等
         float pos_x = 0, pos_y = 0;
-        float heading = 0;  // 改为float类型，保留小数
+        float heading = 0;
         float vx = 0, vy = 0, vz = 0;
         
-        // 解析单个小车数据（7个字段，去掉电压）
+        // 解析单个小车数据
         int parsed = sscanf(ptr, "%3s %f %f %f %f %f %f", 
                            short_id, &pos_x, &pos_y, &heading, 
                            &vx, &vy, &vz);
@@ -766,39 +751,42 @@ void Process_Compact_Broadcast(const char* data)
             
             // 跳过自己的信息
             if (strcmp(car_id, CAR_ID) != 0) {
-                // 拓扑过滤：检查是否应该处理这辆小车的信息
+                // 拓扑过滤
                 if(Should_Process_Car_Info(car_id)) {
                     // 更新其他小车信息
                     Update_Other_Car_Info(car_id, pos_x, pos_y, vx, vy, vz, heading);
-                    
                     processed_cars++;
-                } else {
                 }
-            } else {
             }
             
-            // 移动到下一辆小车数据 - 现在每个小车有7个字段
+            // 移动到下一辆小车数据
             for (int j = 0; j < 7; j++) {
                 ptr = strchr(ptr, ' ');
-                if (ptr == NULL) {
-                    if (i < car_count - 1) {
-                        // debug_print("[广播] ?? 数据不完整，提前结束\r\n");
-                    }
-                    break;
-                }
-                ptr++; // 跳过空格
+                if (ptr == NULL) break;
+                ptr++;
             }
             
-            // 如果已经到字符串末尾，提前退出
             if (ptr == NULL || *ptr == '\0' || *ptr == ']') {
                 break;
             }
         } else {
-           
             break;
         }
     }
     
+    // 只有在成功更新了至少一辆小车信息后才计算时间差
+    if (processed_cars > 0 && last_update_time > 0) {
+        uint32_t time_diff = current_time - last_update_time;
+        
+        char time_msg[32];
+        snprintf(time_msg, sizeof(time_msg), "[更新间隔] %lums\n", time_diff);
+        debug_print(time_msg);
+    }
+    
+    // 更新最后更新时间
+    if (processed_cars > 0) {
+        last_update_time = current_time;
+    }
 }
 
 void Process_Broadcast_Data(const char* data)
