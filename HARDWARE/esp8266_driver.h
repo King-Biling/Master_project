@@ -107,7 +107,8 @@ void ESP8266_Process(void);
 void Process_Multiple_IPD_Packets(char* data_start, uint32_t data_length);
 
 // 目前还未继续完善，后续会根据需要继续添加功能
-
+void Process_Compact_Broadcast_Optimized(const char* data);
+void Process_All_Data_Types(const char* data, int data_len, int link_id);
 #endif
 
 

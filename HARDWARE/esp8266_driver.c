@@ -608,6 +608,7 @@ ESP8266_Status_t ESP8266_Init(void)
 // 更新其他小车信息
 void Update_Other_Car_Info(const char* car_id, float x, float y, float vx, float vy, float vz, float yaw)
 {
+    static uint32_t last_update_time = 0;
     uint32_t current_time = HAL_GetTick();
     
     int existing_index = -1;
@@ -641,8 +642,17 @@ void Update_Other_Car_Info(const char* car_id, float x, float y, float vx, float
                 other_cars_count++;
                 break;
             }
-        }
+        }       
     }
+
+    // 打印更新间隔
+    if (last_update_time > 0) {
+        uint32_t interval = current_time - last_update_time;
+        char interval_msg[32];
+        snprintf(interval_msg, sizeof(interval_msg), "[间隔] %lums\n", interval);
+        debug_print(interval_msg);
+    }
+    last_update_time = current_time;
 }
 
 // 清理过时的小车信息（30秒未更新）
@@ -675,130 +685,51 @@ void Cleanup_Old_Car_Info(void)
 }
 
 // 处理ESP8266接收数据
+// 处理ESP8266接收数据 - 最终简化版本
 void ESP8266_Process(void)
 {
-    // 新增：如果数据量很大，只处理最新的一部分
-    if(esp8266_rx_index > 200) {
-        // 保留最后100字节，丢弃旧数据
-        uint16_t keep_bytes = 100;
-        uint16_t discard_bytes = esp8266_rx_index - keep_bytes;
-        memmove(esp8266_rx_buffer, esp8266_rx_buffer + discard_bytes, keep_bytes);
-        esp8266_rx_index = keep_bytes;
-    }
-
-    if(esp8266_rx_index > 0) {
-        esp8266_rx_buffer[esp8266_rx_index] = '\0';
+    if(esp8266_rx_index == 0) return;
+    
+    // 添加结束符
+    esp8266_rx_buffer[esp8266_rx_index] = '\0';
+    
+    char* data_start = (char*)esp8266_rx_buffer;
+    uint32_t data_length = esp8266_rx_index;
+    
+    // 统一处理所有+IPD包
+    char* current_ptr = data_start;
+    int processed_count = 0;
+    
+    while((current_ptr = strstr(current_ptr, "+IPD")) != NULL && processed_count < 10) {
+        // 快速解析+IPD格式
+        char* comma1 = strchr(current_ptr, ',');
+        if(!comma1) break;
         
+        char* comma2 = strchr(comma1 + 1, ',');
+        if(!comma2) break;
         
-        char* data_start = (char*)esp8266_rx_buffer;
-        uint32_t data_length = esp8266_rx_index;
+        char* colon = strchr(comma2 + 1, ':');
+        if(!colon) break;
         
-        // 检查是否为多个+IPD包粘连的情况
-        int ipd_count = 0;
-        char* search_ptr = data_start;
-        while((search_ptr = strstr(search_ptr, "+IPD")) != NULL) {
-            ipd_count++;
-            search_ptr += 4; // 跳过 "+IPD"
-        }
+        // 手动解析连接ID和数据长度
+        int link_id = atoi(comma1 + 1);
+        int data_len = atoi(comma2 + 1);
+        char* packet_data = colon + 1;
         
-        if(ipd_count > 1) {
+        // 确保数据长度有效
+        if(data_len > 0 && data_len < 500 && 
+           (packet_data + data_len) <= (data_start + data_length)) {
             
-            // 使用多包处理函数
-            debug_print("多包处理-------\r\n");
-            Process_Multiple_IPD_Packets(data_start, data_length);
-        } else {
-            // 原有的单包处理逻辑
-            debug_print("单包处理-------\r\n");
-            char* ipd_ptr = strstr(data_start, "+IPD");
-            if(ipd_ptr != NULL) {
-                int link_id = 0;
-                int data_len = 0;
-                
-                // 解析格式: +IPD,<link_id>,<data_len>:<data>
-                if(sscanf(ipd_ptr, "+IPD,%d,%d:", &link_id, &data_len) == 2) {                   
-                    // 找到冒号位置
-                    char* colon_ptr = strchr(ipd_ptr, ':');
-                    if(colon_ptr != NULL) {
-                        data_start = colon_ptr + 1; // 跳过冒号
-                        
-                        // 确保数据长度不超过缓冲区
-                        if(data_len > 0 && data_len < 1024) {
-                            // 根据连接ID判断数据类型
-                            if(link_id == 0) {
-                                // 连接0：单播数据（控制指令、编队指令等）
-                                // debug_print("[WiFi] 处理单播数据\r\n");
-                                // Process_Unicast_Data(data_start);
-                            } else if(link_id == 1) {
-                                // 连接1：广播数据（其他小车状态）
-                                // debug_print("[WiFi] 处理广播数据\r\n");
-                                // Process_Broadcast_Data(data_start);
-                            } else {
-                                char unknown_msg[32];
-                                // snprintf(unknown_msg, sizeof(unknown_msg), 
-                                //          "[WiFi] 未知连接ID: %d\r\n", link_id);
-                                // debug_print(unknown_msg);
-                            }
-                        } else {
-                            debug_print("[WiFi] 数据长度无效\r\n");
-                        }
-                    } else {
-                        debug_print("[WiFi] 未找到冒号分隔符\r\n");
-                    }
-                } else {
-                    debug_print("[WiFi] 解析+IPD格式失败，尝试备用解析\r\n");                   
-                    // 备用解析：手动解析+IPD格式
-                    char* comma1 = strchr(ipd_ptr, ',');
-                    if(comma1 != NULL) {
-                        char* comma2 = strchr(comma1 + 1, ',');
-                        if(comma2 != NULL) {
-                            char* colon = strchr(comma2 + 1, ':');
-                            if(colon != NULL) {
-                                // 手动解析连接ID和数据长度
-                                link_id = atoi(comma1 + 1);
-                                data_len = atoi(comma2 + 1);
-                                data_start = colon + 1;
-                                
-                                char manual_msg[64];
-                                // snprintf(manual_msg, sizeof(manual_msg), 
-                                //          "[WiFi] 手动解析: ID=%d, Len=%d\r\n", link_id, data_len);
-                                // debug_print(manual_msg);
-                                
-                                // 根据连接ID处理数据
-                                if(link_id == 0) {
-                                    Process_Unicast_Data(data_start);
-                                } else if(link_id == 1) {
-                                    Process_Broadcast_Data(data_start);
-                                }
-                            }
-                        }
-                    }
-                }
-            }else {
-                debug_print("[WiFi] 未知数据格式\r\n");
-                
-                // 对于未知数据，尝试多种解析方式
-                debug_print("[WiFi] 尝试多种解析方式...\r\n");
-                
-                // 1. 尝试查找+IPD（可能被其他字符干扰）
-                char* search_ptr = data_start;
-                while((search_ptr = strstr(search_ptr, "IPD")) != NULL) {
-                    if(search_ptr > data_start && *(search_ptr - 1) == '+') {
-                        debug_print("[WiFi] 找到被干扰的+IPD格式\r\n");
-                        // 这里可以添加处理逻辑
-                        break;
-                    }
-                    search_ptr++;
-                }
-                
-                // 2. 尝试作为广播数据处理
-                Process_Broadcast_Data(data_start); 
-            }
+            // 统一处理所有数据类型
+            Process_All_Data_Types(packet_data, data_len, link_id);
         }
         
-        // 清理缓冲区
-        esp8266_rx_index = 0;
-        memset(esp8266_rx_buffer, 0, sizeof(esp8266_rx_buffer));
-    } 
+        current_ptr = packet_data + data_len;
+        processed_count++;
+    }
+    
+    // 立即清空缓冲区
+    esp8266_rx_index = 0;
     
     // 定期清理过时信息
     static uint32_t last_cleanup_time = 0;
@@ -1210,4 +1141,114 @@ void Process_Formation_Command(const char* command)
         return;
     }
     
+}
+
+// 综合数据处理函数 - 统一处理所有类型的数据
+void Process_All_Data_Types(const char* data, int data_len, int link_id)
+{
+    // 快速检测数据格式并分发处理
+    if (data_len < 2) return;
+    
+    // 检测是否为精简格式指令 [字母,...]
+    if (data[0] == '[' && data[2] == ',') {
+        switch(data[1]) {
+            case 'C': // 控制指令 [C,...]
+                Process_Control_Command(data);
+                break;
+            case 'F': // 编队指令 [F,...]
+                Process_Formation_Command(data);
+                break;
+            case 'T': // 拓扑指令 [T,...]
+                Process_Topology_Command(data);
+                break;
+            default:
+                // 未知指令类型
+                break;
+        }
+        return;
+    }
+    
+    // 检测是否为广播小车数据格式 [数字 ...]
+    if (data[0] == '[' && data[1] >= '0' && data[1] <= '9') {
+        Process_Compact_Broadcast_Optimized(data);
+        return;
+    }
+    
+    // 如果是广播连接，尝试其他格式
+    if (link_id == 1) {
+        // 尝试旧格式指令
+        if (strstr(data, "TOPOLOGY") != NULL) {
+            Process_Topology_Command(data);
+        } else if (strstr(data, "FORMATION") != NULL) {
+            Process_Formation_Command(data);
+        } else if (strstr(data, "CTRL:") != NULL) {
+            Process_Control_Command(data);
+        }
+    }
+}
+
+// 优化后的广播数据处理 - 添加间隔打印
+void Process_Compact_Broadcast_Optimized(const char* data)
+{    
+    // 检查数据起始和结束标记
+    if(data[0] != '[') return;
+    
+    char* end_bracket = strchr(data, ']');
+    if(end_bracket == NULL) return;
+    
+    // 跳过开头的'['
+    const char* ptr = data + 1;
+    
+    // 解析小车数量
+    int car_count = 0;
+    if (sscanf(ptr, "%d", &car_count) != 1) return;
+    
+    if (car_count <= 0 || car_count > MAX_OTHER_CARS) return;
+    
+    // 移动到数量后的空格
+    ptr = strchr(ptr, ' ');
+    if (ptr == NULL) return;
+    ptr++; // 跳过空格
+    
+    // 解析每辆小车的数据
+    int processed_cars = 0;
+    for (int i = 0; i < car_count; i++) {
+        char short_id[4] = {0};
+        float values[6]; // pos_x, pos_y, heading, vx, vy, vz
+        
+        // 一次性解析所有字段
+        int parsed = sscanf(ptr, "%3s %f %f %f %f %f %f", 
+                           short_id, &values[0], &values[1], &values[2],
+                           &values[3], &values[4], &values[5]);
+        
+        if (parsed == 7) {
+            // 转换短ID为完整ID
+            char car_id[16];
+            snprintf(car_id, sizeof(car_id), "CAR%c", short_id[1]);
+            
+            // 跳过自己的信息
+            if (strcmp(car_id, CAR_ID) != 0) {
+                // 拓扑过滤
+                if(Should_Process_Car_Info(car_id)) {
+                    // 更新其他小车信息（内部会打印间隔）
+                    Update_Other_Car_Info(car_id, values[0], values[1], 
+                                        values[3], values[4], values[5], values[2]);
+                    processed_cars++;
+                }
+            }
+            
+            // 快速移动到下一组数据
+            for (int j = 0; j < 7; j++) {
+                ptr = strchr(ptr, ' ');
+                if (ptr == NULL) break;
+                ptr++;
+            }
+            
+            if (ptr == NULL || *ptr == '\0' || *ptr == ']') {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
 }
