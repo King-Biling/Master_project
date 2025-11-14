@@ -233,7 +233,7 @@ void WiFi_State_Ready(void)
     switch(connection_health) {
         case CONNECTION_HEALTHY:
             // ½¡¿µ×´Ì¬£º¸ßÆµ·¢ËÍ£¨50ms£©
-            if(current_time - last_status_send_time > 100) {
+            if(current_time - last_status_send_time > 30) {
                 ESP8266_Status_t result = ESP8266_SendStatus_UDP_Reliable(
                     position[0], position[1], Yaw, Voltage, 
                     Current_Vx, Current_Vy, Current_Vz

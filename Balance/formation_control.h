@@ -46,7 +46,5 @@ uint8_t Detect_Leader_Motion_State(float vx, float vy);
 // º¯ÊýÉùÃ÷
 void Formation_Control(void);
 void Formation_Follower_Control(void);
-void Process_Formation_Command(const char* command);
-void Process_Formation_Update(const char* command);
 
 #endif

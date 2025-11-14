@@ -85,15 +85,13 @@ void ESP8266_AutoAssignCarID(void);
 // 广播数据处理函数
 void Process_Compact_Broadcast(const char* data);
 void Process_Broadcast_Data(const char* data);
-void Process_Segmented_Broadcast(const char* json_data);
 void Update_Other_Car_Info(const char* car_id, float x, float y, float vx, float vy, float vz, float yaw);
-void Print_Other_Cars_Info(void);
 void Cleanup_Old_Car_Info(void);
 void Init_Other_Cars_Info(void);
 
 // 控制命令处理
 void Process_Control_Command(const char* command);
-// void Process_Formation_Command(const char* command);
+void Process_Formation_Command(const char* command);
 
 // 拓扑处理函数
 void Process_Topology_Command(const char* command);
@@ -108,9 +106,6 @@ void Process_Unicast_Data(const char* data);
 void ESP8266_Process(void);
 void Process_Multiple_IPD_Packets(char* data_start, uint32_t data_length);
 
-// 在函数声明部分添加
-void ESP8266_PrintRawData(const char* data, uint32_t length);
-void ESP8266_Debug_PrintBuffer(void);
 // 目前还未继续完善，后续会根据需要继续添加功能
 
 #endif

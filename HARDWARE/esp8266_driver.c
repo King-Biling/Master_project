@@ -38,6 +38,7 @@ void debug_print(const char* message)
     usart1_send_cstring(message);
 }
 
+// 初始化通信拓扑
 void Init_Communication_Topology(void)
 {
     // 根据CAR_ID确定本车索引
@@ -100,6 +101,7 @@ void Init_Communication_Topology(void)
     debug_print("[拓扑] 通信拓扑初始化完成\r\n");
 }
 
+// 判断是否应该处理来自指定小车的信息
 uint8_t Should_Process_Car_Info(const char* car_id)
 {
     // 如果拓扑功能未启用，处理所有小车信息
@@ -129,7 +131,7 @@ uint8_t Should_Process_Car_Info(const char* car_id)
     return result;
 }
 
-
+// 处理拓扑指令
 void Process_Topology_Command(const char* command)
 {
     char debug_msg[128];
@@ -185,6 +187,7 @@ void Process_Topology_Command(const char* command)
     
 }
 
+// 更新拓扑矩阵
 void Update_Topology_Matrix(const char* topology_str)
 {
     char temp_str[128];
@@ -256,24 +259,6 @@ void Update_Topology_Matrix(const char* topology_str)
     }
     
     debug_print("[拓扑] 拓扑矩阵解析完成\r\n");
-    
-    // // 打印拓扑矩阵用于调试
-    // char debug_msg[256];
-    // snprintf(debug_msg, sizeof(debug_msg), 
-    //          "[拓扑] 当前矩阵:\r\n"
-    //          "[%d,%d,%d,%d]\r\n"
-    //          "[%d,%d,%d,%d]\r\n"
-    //          "[%d,%d,%d,%d]\r\n"
-    //          "[%d,%d,%d,%d]\r\n",
-    //          communication_topology[0][0], communication_topology[0][1], 
-    //          communication_topology[0][2], communication_topology[0][3],
-    //          communication_topology[1][0], communication_topology[1][1],
-    //          communication_topology[1][2], communication_topology[1][3],
-    //          communication_topology[2][0], communication_topology[2][1],
-    //          communication_topology[2][2], communication_topology[2][3],
-    //          communication_topology[3][0], communication_topology[3][1],
-    //          communication_topology[3][2], communication_topology[3][3]);
-    // debug_print(debug_msg);
     
     // 修复接收权限验证逻辑
     char car_list[4][8] = {"CAR1", "CAR2", "CAR3", "CAR4"};
@@ -357,7 +342,7 @@ ESP8266_Status_t ESP8266_InitUDP(void)
     }
 }
 
-
+// 发送状态信息（可靠UDP）
 ESP8266_Status_t ESP8266_SendStatus_UDP_Reliable(float x, float y, float yaw, float voltage, float vx, float vy, float vz)
 {
     static char status_msg[128];
@@ -620,296 +605,6 @@ ESP8266_Status_t ESP8266_Init(void)
     return ESP8266_OK;
 }
 
-// 处理精简版分段广播数据（修复版本，原始的JSON版本数据）
-void Process_Segmented_Broadcast(const char* json_data)
-{
-    // debug_print("[广播] 处理精简版分段广播数据\r\n");
-    
-    // 解析小车ID
-    char car_id[16] = {0};
-    const char* id_ptr = strstr(json_data, "\"i\":\"");
-    if (id_ptr != NULL) {
-        id_ptr += 5;
-        const char* id_end = strchr(id_ptr, '"');
-        if (id_end != NULL) {
-            int id_len = id_end - id_ptr;
-            if (id_len > 0 && id_len < (int)sizeof(car_id)-1) {
-                strncpy(car_id, id_ptr, id_len);
-                car_id[id_len] = '\0';
-            }
-        }
-    }
-    
-    if (strlen(car_id) == 0) {
-        // debug_print("[广播] 未找到有效小车ID\r\n");
-        return;
-    }
-    
-    // 跳过自己的信息
-    if (strcmp(car_id, CAR_ID) == 0) {
-        return;
-    }
-    
-    // 解析位置信息 [x,y] 数组格式
-    float pos_x = 0, pos_y = 0;
-    const char* pos_ptr = strstr(json_data, "\"p\":[");
-    if (pos_ptr != NULL) {
-        sscanf(pos_ptr, "\"p\":[%f,%f]", &pos_x, &pos_y);
-    }
-    
-    // 解析航向角
-    float heading = 0;
-    const char* h_ptr = strstr(json_data, "\"h\":");
-    if (h_ptr != NULL) {
-        sscanf(h_ptr, "\"h\":%f", &heading);
-    }
-    
-    // 解析速度信息 [vx,vy,vz] 数组格式
-    float vel_vx = 0, vel_vy = 0, vel_vz = 0;
-    const char* vel_ptr = strstr(json_data, "\"v\":[");
-    if (vel_ptr != NULL) {
-        sscanf(vel_ptr, "\"v\":[%f,%f,%f]", &vel_vx, &vel_vy, &vel_vz);
-    }
-    
-    // 拓扑过滤：检查是否应该处理这辆小车的信息
-    if(!Should_Process_Car_Info(car_id)) {
-        // char filter_msg[64];
-        // snprintf(filter_msg, sizeof(filter_msg), 
-        //          "[拓扑] 过滤 %s 的信息（拓扑限制）\r\n", car_id);
-        // debug_print(filter_msg);
-        return;
-    }
-    
-    // 更新其他小车信息
-    Update_Other_Car_Info(car_id, pos_x, pos_y, vel_vx, vel_vy, vel_vz, heading);
-    
-    // // 修复：在调试信息中添加航向角显示
-    // char debug_msg[128];
-    // snprintf(debug_msg, sizeof(debug_msg), 
-    //          "[广播] 更新小车 %s: 位置(%.2f,%.2f) 航向(%.1f°) 速度(%.3f,%.3f,%.3f)\r\n",
-    //          car_id, pos_x, pos_y, heading, vel_vx, vel_vy, vel_vz);
-    // debug_print(debug_msg);
-}
-
-// 处理精简合并广播数据（新格式：去掉电压数据）
-void Process_Compact_Broadcast(const char* data)
-{    
-    static uint32_t last_update_time = 0;
-    uint32_t current_time = HAL_GetTick();
-    
-    // 检查数据起始和结束标记
-    if(data[0] != '[') {
-        return;
-    }
-    
-    char* end_bracket = strchr(data, ']');
-    if(end_bracket == NULL) {
-        return;
-    }
-    
-    // 跳过开头的'['
-    const char* ptr = data + 1;
-    
-    // 解析小车数量
-    int car_count = 0;
-    if (sscanf(ptr, "%d", &car_count) != 1) {
-        return;
-    }
-    
-    if (car_count <= 0 || car_count > MAX_OTHER_CARS) {
-        return;
-    }
-    
-    // 移动到数量后的空格
-    ptr = strchr(ptr, ' ');
-    if (ptr == NULL) {
-        return;
-    }
-    ptr++; // 跳过空格
-    
-    // 解析每辆小车的数据
-    int processed_cars = 0;
-    for (int i = 0; i < car_count; i++) {
-        char short_id[4] = {0};  // C1, C2等
-        float pos_x = 0, pos_y = 0;
-        float heading = 0;
-        float vx = 0, vy = 0, vz = 0;
-        
-        // 解析单个小车数据
-        int parsed = sscanf(ptr, "%3s %f %f %f %f %f %f", 
-                           short_id, &pos_x, &pos_y, &heading, 
-                           &vx, &vy, &vz);
-        
-        if (parsed == 7) {
-            // 转换短ID为完整ID
-            char car_id[16];
-            snprintf(car_id, sizeof(car_id), "CAR%c", short_id[1]);
-            
-            // 跳过自己的信息
-            if (strcmp(car_id, CAR_ID) != 0) {
-                // 拓扑过滤
-                if(Should_Process_Car_Info(car_id)) {
-                    // 更新其他小车信息
-                    Update_Other_Car_Info(car_id, pos_x, pos_y, vx, vy, vz, heading);
-                    processed_cars++;
-                }
-            }
-            
-            // 移动到下一辆小车数据
-            for (int j = 0; j < 7; j++) {
-                ptr = strchr(ptr, ' ');
-                if (ptr == NULL) break;
-                ptr++;
-            }
-            
-            if (ptr == NULL || *ptr == '\0' || *ptr == ']') {
-                break;
-            }
-        } else {
-            break;
-        }
-    }
-    
-    // 只有在成功更新了至少一辆小车信息后才计算时间差
-    if (processed_cars > 0 && last_update_time > 0) {
-        uint32_t time_diff = current_time - last_update_time;
-        
-        char time_msg[32];
-        snprintf(time_msg, sizeof(time_msg), "[更新间隔] %lums\n", time_diff);
-        debug_print(time_msg);
-    }
-    
-    // 更新最后更新时间
-    if (processed_cars > 0) {
-        last_update_time = current_time;
-    }
-}
-
-void Process_Broadcast_Data(const char* data)
-{
-    // 首先检查是否为新的精简格式指令 [字母,...]
-    if (data[0] == '[' && strchr(data, ']') != NULL) {
-        // 检查是否为指令（控制、编队、拓扑）
-        if (data[1] == 'C' || data[1] == 'F' || data[1] == 'T') {
-            // 这是精简格式的指令
-            char cmd_type = data[1];
-            
-            switch(cmd_type) {
-                case 'C': // 控制指令 [C,...]
-                    debug_print("[广播] 检测到控制指令，转发给控制处理函数\r\n");
-                    Process_Control_Command(data);
-                    break;
-                case 'F': // 编队指令 [F,...]
-                    debug_print("[广播] 检测到编队指令，转发给编队处理函数\r\n");
-                    Process_Formation_Command(data);
-                    break;
-                case 'T': // 拓扑指令 [T,...]
-                    debug_print("[广播] 检测到拓扑指令，转发给拓扑处理函数\r\n");
-                    Process_Topology_Command(data);
-                    break;
-                default:
-                    debug_print("[广播] 未知精简指令格式\r\n");
-                    break;
-            }
-            return;
-        } else {
-            // 这是广播数据格式 [数字 ...]
-            Process_Compact_Broadcast(data);
-            return;
-        }
-    }
-    
-    // 兼容旧格式的指令检查
-    // 检查是否为拓扑指令
-    if (strstr(data, "TOPOLOGY") != NULL) {
-        debug_print("[广播] 检测到拓扑指令(旧格式)，转发给拓扑处理函数\r\n");
-        Process_Topology_Command(data);
-        return;
-    }
-    
-    // 检查是否为编队指令
-    if (strstr(data, "FORMATION") != NULL) {
-        debug_print("[广播] 检测到编队指令(旧格式)，转发给编队处理函数\r\n");
-        Process_Formation_Command(data);
-        return;
-    }
-    
-    // 检查是否为控制指令
-    if (strstr(data, "CTRL:") != NULL) {
-        debug_print("[广播] 检测到控制指令(旧格式)，转发给控制处理函数\r\n");
-        Process_Control_Command(data);
-        return;
-    }
-    
-    // 原有的JSON格式处理
-    if (strstr(data, "\"type\":\"broadcast_single\"") != NULL) {
-        const char* json_start = strstr(data, "{");
-        if (json_start != NULL) {
-            Process_Segmented_Broadcast(json_start);
-            return;
-        }
-    }
-    
-    // 如果都不是，尝试作为未知格式处理
-    debug_print("[广播] 未知广播数据格式\r\n");
-    
-    // 最后尝试通用处理
-    if (data[0] == '[') {
-        // 可能是广播数据但格式不标准
-        Process_Compact_Broadcast(data);
-    }
-}
-
-// 处理单播数据（控制指令、编队指令、拓扑指令等）
-void Process_Unicast_Data(const char* data)
-{
-    // 检查是否为精简格式 [字母,...]
-    if(data[0] == '[') {
-        char cmd_type = data[1]; // 第一个字母代表指令类型
-        
-        switch(cmd_type) {
-            case 'C': // 控制指令 [C,...]
-                Process_Control_Command(data);
-                break;
-            case 'F': // 编队指令 [F,...]
-                Process_Formation_Command(data);
-                break;
-            case 'T': // 拓扑指令 [T,...]
-                Process_Topology_Command(data);
-                break;
-            default:
-                // 未知指令类型
-                break;
-        }
-        return;
-    }
-}
-
-// 控制命令处理函数 - 确保与wifi_task.c中的定义一致
-void Process_Control_Command(const char* command)
-{
-    if(command[0] == '[' && strstr(command, "C,") != NULL) {
-        char target_car[16];
-        float target_x, target_y, target_yaw;
-        
-        // 解析格式: [C,CAR1,1.5,2.3,45.0]
-        if(sscanf(command, "[C,%[^,],%f,%f,%f", 
-                  target_car, &target_x, &target_y, &target_yaw) == 4) {
-            
-            // 检查是否是发给本车的命令
-            if(strcmp(target_car, CAR_ID) == 0) {
-                Target_position[0] = target_x;
-                Target_position[1] = target_y;
-                Target_Yaw = target_yaw;
-                newCoordinateReceived = 1;
-                Auto_mode = 1;
-                position_reached = 0;
-            }
-        }
-        return;
-    }
-}
-
 // 更新其他小车信息
 void Update_Other_Car_Info(const char* car_id, float x, float y, float vx, float vy, float vz, float yaw)
 {
@@ -950,46 +645,6 @@ void Update_Other_Car_Info(const char* car_id, float x, float y, float vx, float
     }
 }
 
-// 打印所有其他小车信息
-void Print_Other_Cars_Info(void)
-{
-    static uint32_t last_print_time = 0;
-    uint32_t current_time = HAL_GetTick();
-    
-    if (current_time - last_print_time < 5000) {
-        return;
-    }
-    last_print_time = current_time;
-    
-    debug_print("====================\r\n");
-    
-    int valid_count = 0;
-    for (int i = 0; i < MAX_OTHER_CARS; i++) {
-        if (other_cars[i].valid) {
-            char debug_msg[256];
-            uint32_t time_since_update = (current_time - other_cars[i].last_update) / 1000;
-            snprintf(debug_msg, sizeof(debug_msg), 
-                     "[%d] %s: (%.2f,%.2f) (%.3f,%.3f,%.3f) [%lu秒前]\r\n",
-                     valid_count + 1, other_cars[i].car_id,
-                     other_cars[i].position_x, other_cars[i].position_y,
-                     other_cars[i].velocity_vx, other_cars[i].velocity_vy, other_cars[i].velocity_vz,
-                     time_since_update);
-            debug_print(debug_msg);
-            valid_count++;
-        }
-    }
-    
-    if (valid_count == 0) {
-        debug_print("[广播] 暂无其他小车信息\r\n");
-    } else {
-        char count_msg[64];
-        snprintf(count_msg, sizeof(count_msg), 
-                 "[广播] 总计: %d 辆其他小车\r\n", valid_count);
-        debug_print(count_msg);
-    }
-    debug_print("====================\r\n");
-}
-
 // 清理过时的小车信息（30秒未更新）
 void Cleanup_Old_Car_Info(void)
 {
@@ -1019,106 +674,7 @@ void Cleanup_Old_Car_Info(void)
     }
 }
 
-void Process_Multiple_IPD_Packets(char* data_start, uint32_t data_length)
-{
-    char* current_ptr = data_start;
-    uint32_t remaining_length = data_length;
-    int processed_packets = 0;
-    
-    while (remaining_length > 0 && processed_packets < 10) { // 最多处理10个包防止无限循环
-        // 查找下一个 +IPD 开头
-        char* ipd_ptr = strstr(current_ptr, "+IPD");
-        if (ipd_ptr == NULL) {
-            break; // 没有更多 +IPD 包
-        }
-        
-        // 计算当前包在缓冲区中的位置
-        uint32_t current_offset = ipd_ptr - data_start;
-        if (current_offset >= data_length) {
-            break; // 超出范围
-        }
-        
-        // 解析这个 +IPD 包
-        int link_id = 0;
-        int data_len = 0;
-        char* colon_ptr = NULL;
-        
-        // 尝试解析格式: +IPD,<link_id>,<data_len>:<data>
-        if (sscanf(ipd_ptr, "+IPD,%d,%d:", &link_id, &data_len) == 2) {
-            colon_ptr = strchr(ipd_ptr, ':');
-            if (colon_ptr != NULL) {
-                char* packet_data_start = colon_ptr + 1;
-                
-                // 确保数据长度有效且不会越界
-                uint32_t packet_end_offset = (packet_data_start + data_len) - data_start;
-                if (packet_end_offset <= data_length) {
-                    // 临时保存当前数据包
-                    char temp_packet[256];
-                    int copy_len = data_len < (int)sizeof(temp_packet)-1 ? data_len : sizeof(temp_packet)-1;
-                    strncpy(temp_packet, packet_data_start, copy_len);
-                    temp_packet[copy_len] = '\0';
-                    
-                    // 在多包处理函数中，修改数据处理部分：
-                    if (link_id == 0) {
-                        // 单播数据：可能是控制指令或编队指令
-                        Process_Unicast_Data(temp_packet);
-                    } else if (link_id == 1) {
-                        // 广播数据：可能是广播数据或广播指令                        
-                        Process_Broadcast_Data(temp_packet);
-                    }
-                    
-                    processed_packets++;
-                    
-                    // 移动到下一个包
-                    current_ptr = packet_data_start + data_len;
-                    remaining_length = data_length - (current_ptr - data_start);
-                    continue;
-                } 
-            } 
-        } 
-        
-        // 如果解析失败，尝试备用解析
-        char* comma1 = strchr(ipd_ptr, ',');
-        if (comma1 != NULL) {
-            char* comma2 = strchr(comma1 + 1, ',');
-            if (comma2 != NULL) {
-                char* colon = strchr(comma2 + 1, ':');
-                if (colon != NULL) {
-                    // 手动解析
-                    link_id = atoi(comma1 + 1);
-                    data_len = atoi(comma2 + 1);
-                    char* packet_data_start = colon + 1;
-                    
-                    // 确保数据长度有效
-                    uint32_t packet_end_offset = (packet_data_start + data_len) - data_start;
-                    if (packet_end_offset <= data_length) {
-                        char temp_packet[256];
-                        int copy_len = data_len < (int)sizeof(temp_packet)-1 ? data_len : sizeof(temp_packet)-1;
-                        strncpy(temp_packet, packet_data_start, copy_len);
-                        temp_packet[copy_len] = '\0';
-                        
-                        if (link_id == 0) {
-                            Process_Unicast_Data(temp_packet);
-                        } else if (link_id == 1) {
-                            Process_Broadcast_Data(temp_packet);
-                        }
-                        
-                        processed_packets++;
-                        current_ptr = packet_data_start + data_len;
-                        remaining_length = data_length - (current_ptr - data_start);
-                        continue;
-                    }
-                }
-            }
-        }
-        
-        // 如果都无法解析，跳到下一个字符继续查找
-        current_ptr = ipd_ptr + 4; // 跳过 "+IPD"
-        remaining_length = data_length - (current_ptr - data_start);
-    }
-    
-}
-
+// 处理ESP8266接收数据
 void ESP8266_Process(void)
 {
     // 新增：如果数据量很大，只处理最新的一部分
@@ -1133,9 +689,6 @@ void ESP8266_Process(void)
     if(esp8266_rx_index > 0) {
         esp8266_rx_buffer[esp8266_rx_index] = '\0';
         
-        // // 首先打印原始数据用于调试
-        // debug_print("\r\n[WiFi] 收到数据，开始处理...\r\n");
-        // ESP8266_PrintRawData((char*)esp8266_rx_buffer, esp8266_rx_index);
         
         char* data_start = (char*)esp8266_rx_buffer;
         uint32_t data_length = esp8266_rx_index;
@@ -1256,81 +809,405 @@ void ESP8266_Process(void)
     }
 }
 
-// 添加调试打印函数
-void ESP8266_PrintRawData(const char* data, uint32_t length)
-{
-    static uint32_t last_print_time = 0;
+// 处理广播小车数据格式数据（新格式：去掉电压数据）
+void Process_Compact_Broadcast(const char* data)
+{    
+    static uint32_t last_update_time = 0;
     uint32_t current_time = HAL_GetTick();
     
-    // 限制打印频率，避免刷屏
-    if(current_time - last_print_time < 100) {
+    // 检查数据起始和结束标记
+    if(data[0] != '[') {
         return;
     }
-    last_print_time = current_time;
     
-    debug_print("\r\n=== 原始数据开始 ===\r\n");
-    
-    // 打印数据长度
-    char len_msg[32];
-    snprintf(len_msg, sizeof(len_msg), "数据长度: %lu 字节\r\n", length);
-    debug_print(len_msg);
-    
-    // 打印ASCII字符
-    debug_print("ASCII: ");
-    for(uint32_t i = 0; i < length && i < 128; i++) {
-        if(data[i] >= 32 && data[i] <= 126) {  // 可打印字符
-            char ch[2] = {data[i], '\0'};
-            debug_print(ch);
-        } else {
-            debug_print(".");  // 非打印字符用点表示
-        }
+    char* end_bracket = strchr(data, ']');
+    if(end_bracket == NULL) {
+        return;
     }
-    debug_print("\r\n");
     
-    // 打印十六进制
-    debug_print("HEX:   ");
-    for(uint32_t i = 0; i < length && i < 64; i++) {
-        char hex[4];
-        snprintf(hex, sizeof(hex), "%02X ", (uint8_t)data[i]);
-        debug_print(hex);
+    // 跳过开头的'['
+    const char* ptr = data + 1;
+    
+    // 解析小车数量
+    int car_count = 0;
+    if (sscanf(ptr, "%d", &car_count) != 1) {
+        return;
+    }
+    
+    if (car_count <= 0 || car_count > MAX_OTHER_CARS) {
+        return;
+    }
+    
+    // 移动到数量后的空格
+    ptr = strchr(ptr, ' ');
+    if (ptr == NULL) {
+        return;
+    }
+    ptr++; // 跳过空格
+    
+    // 解析每辆小车的数据
+    int processed_cars = 0;
+    for (int i = 0; i < car_count; i++) {
+        char short_id[4] = {0};  // C1, C2等
+        float pos_x = 0, pos_y = 0;
+        float heading = 0;
+        float vx = 0, vy = 0, vz = 0;
         
-        // 每16字节换行
-        if((i + 1) % 16 == 0 && i + 1 < length) {
-            debug_print("\r\n       ");
+        // 解析单个小车数据
+        int parsed = sscanf(ptr, "%3s %f %f %f %f %f %f", 
+                           short_id, &pos_x, &pos_y, &heading, 
+                           &vx, &vy, &vz);
+        
+        if (parsed == 7) {
+            // 转换短ID为完整ID
+            char car_id[16];
+            snprintf(car_id, sizeof(car_id), "CAR%c", short_id[1]);
+            
+            // 跳过自己的信息
+            if (strcmp(car_id, CAR_ID) != 0) {
+                // 拓扑过滤
+                if(Should_Process_Car_Info(car_id)) {
+                    // 更新其他小车信息
+                    Update_Other_Car_Info(car_id, pos_x, pos_y, vx, vy, vz, heading);
+                    processed_cars++;
+                }
+            }
+            
+            // 移动到下一辆小车数据
+            for (int j = 0; j < 7; j++) {
+                ptr = strchr(ptr, ' ');
+                if (ptr == NULL) break;
+                ptr++;
+            }
+            
+            if (ptr == NULL || *ptr == '\0' || *ptr == ']') {
+                break;
+            }
+        } else {
+            break;
         }
     }
-    debug_print("\r\n");
     
-    // 如果有特殊字符，特别标注
-    for(uint32_t i = 0; i < length; i++) {
-        if(data[i] == '\r') {
-            debug_print("发现回车符(\\r)\r\n");
-        } else if(data[i] == '\n') {
-            debug_print("发现换行符(\\n)\r\n");
-        } else if(data[i] == '\0') {
-            debug_print("发现空字符(\\0)\r\n");
-        }
+    // 只有在成功更新了至少一辆小车信息后才计算时间差
+    if (processed_cars > 0 && last_update_time > 0) {
+        uint32_t time_diff = current_time - last_update_time;
+        
+        char time_msg[32];
+        snprintf(time_msg, sizeof(time_msg), "[更新间隔] %lums\n", time_diff);
+        debug_print(time_msg);
     }
     
-    debug_print("=== 原始数据结束 ===\r\n\r\n");
+    // 更新最后更新时间
+    if (processed_cars > 0) {
+        last_update_time = current_time;
+    }
 }
 
-// 打印接收缓冲区内容
-void ESP8266_Debug_PrintBuffer(void)
+// 处理广播数据
+void Process_Broadcast_Data(const char* data)
 {
-    debug_print("\r\n=== 接收缓冲区状态 ===\r\n");
-    
-    char buf_info[64];
-    snprintf(buf_info, sizeof(buf_info), 
-             "缓冲区索引: %d, 缓冲区大小: %lu\r\n", 
-             esp8266_rx_index, sizeof(esp8266_rx_buffer));
-    debug_print(buf_info);
-    
-    if(esp8266_rx_index > 0) {
-        ESP8266_PrintRawData((char*)esp8266_rx_buffer, esp8266_rx_index);
-    } else {
-        debug_print("接收缓冲区为空\r\n");
+    // 首先检查是否为新的精简格式指令 [字母,...]
+    if (data[0] == '[' && strchr(data, ']') != NULL) {
+        // 检查是否为指令（控制、编队、拓扑）
+        if (data[1] == 'C' || data[1] == 'F' || data[1] == 'T') {
+            // 这是精简格式的指令
+            char cmd_type = data[1];
+            
+            switch(cmd_type) {
+                case 'C': // 控制指令 [C,...]
+                    debug_print("[广播] 检测到控制指令，转发给控制处理函数\r\n");
+                    Process_Control_Command(data);
+                    break;
+                case 'F': // 编队指令 [F,...]
+                    debug_print("[广播] 检测到编队指令，转发给编队处理函数\r\n");
+                    Process_Formation_Command(data);
+                    break;
+                case 'T': // 拓扑指令 [T,...]
+                    debug_print("[广播] 检测到拓扑指令，转发给拓扑处理函数\r\n");
+                    Process_Topology_Command(data);
+                    break;
+                default:
+                    debug_print("[广播] 未知精简指令格式\r\n");
+                    break;
+            }
+            return;
+        } else {
+            // 这是广播小车数据格式 [数字 ...]
+            Process_Compact_Broadcast(data);
+            return;
+        }
     }
     
-    debug_print("=== 缓冲区状态结束 ===\r\n\r\n");
+    // 兼容旧格式的指令检查
+    // 检查是否为拓扑指令
+    if (strstr(data, "TOPOLOGY") != NULL) {
+        debug_print("[广播] 检测到拓扑指令(旧格式)，转发给拓扑处理函数\r\n");
+        Process_Topology_Command(data);
+        return;
+    }
+    
+    // 检查是否为编队指令
+    if (strstr(data, "FORMATION") != NULL) {
+        debug_print("[广播] 检测到编队指令(旧格式)，转发给编队处理函数\r\n");
+        Process_Formation_Command(data);
+        return;
+    }
+    
+    // 检查是否为控制指令
+    if (strstr(data, "CTRL:") != NULL) {
+        debug_print("[广播] 检测到控制指令(旧格式)，转发给控制处理函数\r\n");
+        Process_Control_Command(data);
+        return;
+    }
+    
+    // 如果都不是，尝试作为未知格式处理
+    debug_print("[广播] 未知广播数据格式\r\n");
+    
+    // 最后尝试通用处理
+    if (data[0] == '[') {
+        // 可能是广播数据但格式不标准
+        Process_Compact_Broadcast(data);
+    }
+}
+
+// 处理单播数据（控制指令、编队指令、拓扑指令等）
+void Process_Unicast_Data(const char* data)
+{
+    // 检查是否为精简格式 [字母,...]
+    if(data[0] == '[') {
+        char cmd_type = data[1]; // 第一个字母代表指令类型
+        
+        switch(cmd_type) {
+            case 'C': // 控制指令 [C,...]
+                Process_Control_Command(data);
+                break;
+            case 'F': // 编队指令 [F,...]
+                Process_Formation_Command(data);
+                break;
+            case 'T': // 拓扑指令 [T,...]
+                Process_Topology_Command(data);
+                break;
+            default:
+                // 未知指令类型
+                break;
+        }
+        return;
+    }
+}
+
+// 控制命令处理函数 - 确保与wifi_task.c中的定义一致
+void Process_Control_Command(const char* command)
+{
+    if(command[0] == '[' && strstr(command, "C,") != NULL) {
+        char target_car[16];
+        float target_x, target_y, target_yaw;
+        
+        // 解析格式: [C,CAR1,1.5,2.3,45.0]
+        if(sscanf(command, "[C,%[^,],%f,%f,%f", 
+                  target_car, &target_x, &target_y, &target_yaw) == 4) {
+            
+            // 检查是否是发给本车的命令
+            if(strcmp(target_car, CAR_ID) == 0) {
+                Target_position[0] = target_x;
+                Target_position[1] = target_y;
+                Target_Yaw = target_yaw;
+                newCoordinateReceived = 1;
+                Auto_mode = 1;
+                position_reached = 0;
+            }
+        }
+        return;
+    }
+}
+
+// 处理多包数据（+IPD 格式）
+void Process_Multiple_IPD_Packets(char* data_start, uint32_t data_length)
+{
+    char* current_ptr = data_start;
+    uint32_t remaining_length = data_length;
+    int processed_packets = 0;
+    
+    while (remaining_length > 0 && processed_packets < 10) { // 最多处理10个包防止无限循环
+        // 查找下一个 +IPD 开头
+        char* ipd_ptr = strstr(current_ptr, "+IPD");
+        if (ipd_ptr == NULL) {
+            break; // 没有更多 +IPD 包
+        }
+        
+        // 计算当前包在缓冲区中的位置
+        uint32_t current_offset = ipd_ptr - data_start;
+        if (current_offset >= data_length) {
+            break; // 超出范围
+        }
+        
+        // 解析这个 +IPD 包
+        int link_id = 0;
+        int data_len = 0;
+        char* colon_ptr = NULL;
+        
+        // 尝试解析格式: +IPD,<link_id>,<data_len>:<data>
+        if (sscanf(ipd_ptr, "+IPD,%d,%d:", &link_id, &data_len) == 2) {
+            colon_ptr = strchr(ipd_ptr, ':');
+            if (colon_ptr != NULL) {
+                char* packet_data_start = colon_ptr + 1;
+                
+                // 确保数据长度有效且不会越界
+                uint32_t packet_end_offset = (packet_data_start + data_len) - data_start;
+                if (packet_end_offset <= data_length) {
+                    // 临时保存当前数据包
+                    char temp_packet[256];
+                    int copy_len = data_len < (int)sizeof(temp_packet)-1 ? data_len : sizeof(temp_packet)-1;
+                    strncpy(temp_packet, packet_data_start, copy_len);
+                    temp_packet[copy_len] = '\0';
+                    
+                    // 在多包处理函数中，修改数据处理部分：
+                    if (link_id == 0) {
+                        // 单播数据：可能是控制指令或编队指令
+                        Process_Unicast_Data(temp_packet);
+                    } else if (link_id == 1) {
+                        // 广播数据：可能是广播数据或广播指令                        
+                        Process_Broadcast_Data(temp_packet);
+                    }
+                    
+                    processed_packets++;
+                    
+                    // 移动到下一个包
+                    current_ptr = packet_data_start + data_len;
+                    remaining_length = data_length - (current_ptr - data_start);
+                    continue;
+                } 
+            } 
+        } 
+        
+        // 如果解析失败，尝试备用解析
+        char* comma1 = strchr(ipd_ptr, ',');
+        if (comma1 != NULL) {
+            char* comma2 = strchr(comma1 + 1, ',');
+            if (comma2 != NULL) {
+                char* colon = strchr(comma2 + 1, ':');
+                if (colon != NULL) {
+                    // 手动解析
+                    link_id = atoi(comma1 + 1);
+                    data_len = atoi(comma2 + 1);
+                    char* packet_data_start = colon + 1;
+                    
+                    // 确保数据长度有效
+                    uint32_t packet_end_offset = (packet_data_start + data_len) - data_start;
+                    if (packet_end_offset <= data_length) {
+                        char temp_packet[256];
+                        int copy_len = data_len < (int)sizeof(temp_packet)-1 ? data_len : sizeof(temp_packet)-1;
+                        strncpy(temp_packet, packet_data_start, copy_len);
+                        temp_packet[copy_len] = '\0';
+                        
+                        if (link_id == 0) {
+                            Process_Unicast_Data(temp_packet);
+                        } else if (link_id == 1) {
+                            Process_Broadcast_Data(temp_packet);
+                        }
+                        
+                        processed_packets++;
+                        current_ptr = packet_data_start + data_len;
+                        remaining_length = data_length - (current_ptr - data_start);
+                        continue;
+                    }
+                }
+            }
+        }
+        
+        // 如果都无法解析，跳到下一个字符继续查找
+        current_ptr = ipd_ptr + 4; // 跳过 "+IPD"
+        remaining_length = data_length - (current_ptr - data_start);
+    }
+    
+}
+
+//  处理编队指令
+void Process_Formation_Command(const char* command)
+{
+    char debug_msg[256];
+    
+    // // 首先打印接收到的原始指令
+    // snprintf(debug_msg, sizeof(debug_msg), 
+    //          "[编队] 收到指令: %s\r\n", command);
+    // debug_print(debug_msg);
+    
+    // 检查新格式 [F,...]
+    if(command[0] == '[' && strstr(command, "F,") != NULL) {
+        char cmd_type[2];
+        char leader_id[16];
+        char formation_type[20];
+        float offset_x, offset_y, offset_yaw;
+        
+        // 解析指令类型
+        if(sscanf(command, "[F,%1s", cmd_type) == 1) {
+            switch(cmd_type[0]) {
+                case 'T': // 停止编队 [F,T]
+                    Formation_mode = FORMATION_MODE_NONE;
+                    Formation_leader[0] = '\0';
+                    debug_print("[编队] 停止编队控制\r\n");
+                    break;
+                    
+                case 'S': // 开始编队 [F,S,CAR1,line]
+                    if(sscanf(command, "[F,S,%[^,],%s", leader_id, formation_type) == 2) {
+                        debug_print("[编队] 收到开始编队指令\r\n");
+                        // 这里可以记录队形类型，等待后续角色指令
+                    }
+                    break;
+                    
+                case 'L': // 设置领航者 [F,L,CAR1]
+                    if(sscanf(command, "[F,L,%s", leader_id) == 1) {
+                        Formation_mode = FORMATION_MODE_LEADER;
+                        strcpy(Formation_leader, CAR_ID);
+                        Auto_mode = 1;
+                        snprintf(debug_msg, sizeof(debug_msg), 
+                                 "[编队] 设置为领航者\r\n");
+                        debug_print(debug_msg);
+                    }
+                    break;
+                    
+                case 'F': // 设置跟随者 [F,F,CAR1,0.5,0.0,0.0]
+                    if(sscanf(command, "[F,F,%[^,],%f,%f,%f", 
+                               leader_id, &offset_x, &offset_y, &offset_yaw) == 4) {
+                        Formation_mode = FORMATION_MODE_FOLLOWER;
+                        strcpy(Formation_leader, leader_id);
+                        Formation_offset_x = offset_x;
+                        Formation_offset_y = offset_y;
+                        Formation_offset_yaw = offset_yaw;
+                        Auto_mode = 1;
+                        
+                        snprintf(debug_msg, sizeof(debug_msg), 
+                                 "[编队] 设置为跟随者，领航者:%s 偏移(%.2f,%.2f,%.1f)\r\n", 
+                                 leader_id, offset_x, offset_y, offset_yaw);
+                        debug_print(debug_msg);
+                    }
+                    break;
+                    
+                case 'U': // 更新偏移 [F,U,CAR1,0.3,0.2,0.0]
+                    if(sscanf(command, "[F,U,%[^,],%f,%f,%f", 
+                               leader_id, &offset_x, &offset_y, &offset_yaw) == 4) {
+                        // 检查是否是本车跟随的领航者
+                        if(Formation_mode == FORMATION_MODE_FOLLOWER && 
+                           strcmp(leader_id, Formation_leader) == 0) {
+                            Formation_offset_x = offset_x;
+                            Formation_offset_y = offset_y;
+                            Formation_offset_yaw = offset_yaw;
+                            
+                            snprintf(debug_msg, sizeof(debug_msg), 
+                                     "[编队] 更新偏移量 (%.2f,%.2f,%.1f)\r\n", 
+                                     offset_x, offset_y, offset_yaw);
+                            debug_print(debug_msg);
+                        }
+                    }
+                    break;
+                    
+                default:
+                    snprintf(debug_msg, sizeof(debug_msg), 
+                             "[编队] 未知编队指令类型: %c\r\n", cmd_type[0]);
+                    debug_print(debug_msg);
+                    break;
+            }
+        }
+        return;
+    }
+    
 }
