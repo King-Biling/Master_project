@@ -353,12 +353,12 @@ ESP8266_Status_t ESP8266_SendStatus_UDP_Reliable(float x, float y, float yaw, fl
              "%s:%.2f,%.2f,%.1f,%.1f,%.3f,%.3f,%.3f", 
              CAR_ID, x, y, yaw, voltage, vx, vy, vz);
     
-    // 如果UDP未初始化，先初始化
-    if(!esp8266_udp_initialized) {
-        if(ESP8266_InitUDP() != ESP8266_OK) {
-            return ESP8266_ERROR;
-        }
-    }
+    // // 如果UDP未初始化，先初始化
+    // if(!esp8266_udp_initialized) {
+    //     if(ESP8266_InitUDP() != ESP8266_OK) {
+    //         return ESP8266_ERROR;
+    //     }
+    // }
      
     char send_cmd[32];
     int len = sprintf(send_cmd, "AT+CIPSEND=0,%d\r\n", strlen(status_msg));

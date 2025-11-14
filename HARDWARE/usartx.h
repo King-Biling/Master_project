@@ -83,7 +83,7 @@ extern uint16_t rx6_index;
 extern char rx4_buffer[256];
 extern uint16_t rx4_index;
 
-extern uint8_t esp8266_rx_buffer[512];
+extern uint8_t esp8266_rx_buffer[1024];
 extern uint16_t esp8266_rx_index;
 extern uint8_t esp8266_receive_byte;
 

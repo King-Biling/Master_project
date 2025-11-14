@@ -15,7 +15,7 @@ uint16_t rx6_index = 0;
 char rx4_buffer[256];
 uint16_t rx4_index = 0;
 
-uint8_t esp8266_rx_buffer[512];
+uint8_t esp8266_rx_buffer[1024];
 uint16_t esp8266_rx_index = 0;
 uint8_t esp8266_receive_byte;
 
