@@ -343,6 +343,7 @@ ESP8266_Status_t ESP8266_InitUDP(void)
 }
 
 // 发送状态信息（可靠UDP）
+// 优化发送状态函数，增加容错
 ESP8266_Status_t ESP8266_SendStatus_UDP_Reliable(float x, float y, float yaw, float voltage, float vx, float vy, float vz)
 {
     static char status_msg[128];
@@ -359,25 +360,25 @@ ESP8266_Status_t ESP8266_SendStatus_UDP_Reliable(float x, float y, float yaw, fl
         }
     }
      
-    char send_cmd[32];  //
+    char send_cmd[32];
     int len = sprintf(send_cmd, "AT+CIPSEND=0,%d\r\n", strlen(status_msg));
     
-    // 发送命令，最多重试2次（减少重试次数）
-    for(retry_count = 0; retry_count < 2; retry_count++) {
+    // 发送命令，最多重试1次（减少重试次数）
+    for(retry_count = 0; retry_count < 1; retry_count++) {
         // 清空接收缓冲区
         esp8266_rx_index = 0;
         memset(esp8266_rx_buffer, 0, sizeof(esp8266_rx_buffer));
         
         HAL_UART_Transmit(&huart6, (uint8_t*)send_cmd, len, 100);
-        HAL_Delay(3);  // 增加延迟，等待响应
+        HAL_Delay(5);  // 适当增加延迟
         
         // 检查是否收到">"提示
         uint32_t wait_start = HAL_GetTick();
-        while(HAL_GetTick() - wait_start < 1000) {
+        while(HAL_GetTick() - wait_start < 500) {  // 缩短超时时间
             if(esp8266_rx_index > 0 && strstr((char*)esp8266_rx_buffer, ">") != NULL) {
                 break;
             }
-            HAL_Delay(3);
+            HAL_Delay(2);
         }
         
         // 发送数据
@@ -385,7 +386,7 @@ ESP8266_Status_t ESP8266_SendStatus_UDP_Reliable(float x, float y, float yaw, fl
         HAL_UART_Transmit(&huart6, (uint8_t*)"\r\n", 2, 100);
         
         // 检查发送是否成功
-        HAL_Delay(3);  // 等待响应
+        HAL_Delay(5);  // 等待响应
         if(esp8266_rx_index > 0) {
             if(strstr((char*)esp8266_rx_buffer, "SEND OK") != NULL) {
                 last_successful_communication = HAL_GetTick();
@@ -395,12 +396,11 @@ ESP8266_Status_t ESP8266_SendStatus_UDP_Reliable(float x, float y, float yaw, fl
             }
         }   
         
-        HAL_Delay(3);
+        HAL_Delay(5);
     }
     
-    // 发送失败，标记UDP需要重新初始化
-    esp8266_udp_initialized = 0;
-    esp8266_broadcast_initialized = 0;
+    // 发送失败，但不立即标记UDP需要重新初始化
+    // 只有当连续失败很多次时才会触发重连
     return ESP8266_ERROR;
 }  
 

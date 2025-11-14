@@ -31,7 +31,8 @@ void WiFi_Task(void *pvParameters)
     while(1) {
         // 此任务以50Hz的频率运行（20ms控制一次）
         vTaskDelayUntil(&lastWakeTime, F2T(RATE_50_HZ)); 
-        
+        // 处理接收到的数据（包括广播信息）
+        ESP8266_Process();
         switch(wifi_state) {
             case WIFI_STATE_INIT:
                 WiFi_State_Init();
@@ -163,15 +164,15 @@ void WiFi_State_Connecting(void)
     }
 }
 
-// UDP重连状态处理 - 增强版本
+// UDP重连状态处理 - 优化版本，避免频繁重连
 void WiFi_State_UDP_Reconnecting(void)
 {
     static uint32_t last_udp_reconnect = 0;
     static uint8_t reconnect_attempts = 0;
     uint32_t current_time = HAL_GetTick();
     
-    // 每3秒尝试重新初始化UDP
-    if(current_time - last_udp_reconnect > 3000) {
+    // 每5秒尝试重新初始化UDP（从3秒改为5秒）
+    if(current_time - last_udp_reconnect > 5000) {
         reconnect_attempts++;
         debug_print("[UDP] 尝试重新初始化UDP连接...\r\n");
         
@@ -185,8 +186,8 @@ void WiFi_State_UDP_Reconnecting(void)
         } else {
             debug_print("[UDP] UDP重连失败\r\n");
             
-            // 如果连续5次UDP重连失败，尝试完全重新初始化
-            if(reconnect_attempts >= 5) {
+            // 如果连续3次UDP重连失败，尝试完全重新初始化（从5次改为3次）
+            if(reconnect_attempts >= 3) {
                 debug_print("[UDP] 连续重连失败，回到初始化状态\r\n");
                 wifi_state = WIFI_STATE_INIT;
                 reconnect_attempts = 0;
@@ -197,7 +198,7 @@ void WiFi_State_UDP_Reconnecting(void)
     }
 }
 
-// 在WiFi_State_Ready中增加连接健康检查 - 增强版本
+// 在WiFi_State_Ready中修改连接健康检查 - 降低敏感度
 void WiFi_State_Ready(void)
 {
     uint32_t current_time = HAL_GetTick();
@@ -212,10 +213,10 @@ void WiFi_State_Ready(void)
         return;
     }
     
-    // 每10秒检查一次UDP连接健康状态
-    if(current_time - last_health_check > 10000) {
+    // 每30秒检查一次UDP连接健康状态（从10秒改为30秒）
+    if(current_time - last_health_check > 30000) {
         // 如果连续多次发送失败，尝试重新初始化UDP
-        if(udp_health_counter > 3) {
+        if(udp_health_counter > 20) {  // 从5次改为20次，大幅降低敏感度
             debug_print("[健康检查] UDP连接异常，尝试重新初始化...\r\n");
             esp8266_udp_initialized = 0;
             if(ESP8266_InitUDP() == ESP8266_OK) {
@@ -223,7 +224,7 @@ void WiFi_State_Ready(void)
                 udp_health_counter = 0;
             } else {
                 debug_print("[健康检查] UDP重新初始化失败\r\n");
-                connection_health = CONNECTION_DISCONNECTED;
+                // 即使失败也不立即进入断开状态，继续尝试
             }
         }
         last_health_check = current_time;
@@ -248,10 +249,11 @@ void WiFi_State_Ready(void)
                     consecutive_failures++;
                     udp_health_counter++;
                     
-                    if(consecutive_failures >= 10) {  // 进一步降低阈值到10次
+                    // 大幅提高重连阈值，避免频繁重连
+                    if(consecutive_failures >= 200) {  // 从50次改为200次
                         // UDP通信失败，转为断开状态
                         connection_health = CONNECTION_DISCONNECTED;
-                        // usart1_send_cstring("[状态机] 转为断开状态\r\n");
+                        debug_print("[状态机] 连续失败过多，转为断开状态\r\n");
                     }
                 }
                 last_status_send_time = current_time;
@@ -260,7 +262,7 @@ void WiFi_State_Ready(void)
             
         case CONNECTION_DISCONNECTED:
             // 断开状态：开始重连流程
-            // usart1_send_cstring("[状态机] 开始UDP重连流程\r\n");
+            debug_print("[状态机] 开始UDP重连流程\r\n");
             esp8266_udp_initialized = 0;  // 标记需要重新初始化
             wifi_state = WIFI_STATE_UDP_RECONNECTING;
             connection_health = CONNECTION_HEALTHY;  // 重置为健康状态
@@ -270,21 +272,7 @@ void WiFi_State_Ready(void)
     }
     
     // 处理接收到的数据（包括广播信息）
-    ESP8266_Process();
-    
-    // // 定期打印连接状态
-    // static uint32_t last_status_print = 0;
-    // if(current_time - last_status_print > 5000) { // 每5秒打印一次
-    //     char status_msg[128];
-    //     uint32_t connection_duration = (current_time - connection_start_time) / 1000;
-    //     snprintf(status_msg, sizeof(status_msg), 
-    //              "[状态] 连接:%ds, UDP:%s, 失败:%d, 健康:%d\r\n",
-    //              connection_duration,
-    //              esp8266_udp_initialized ? "已初始化" : "未初始化",
-    //              consecutive_failures, udp_health_counter);
-    //     debug_print(status_msg);
-    //     last_status_print = current_time;
-    // }
+    // ESP8266_Process();
 }
 
 // 错误状态处理 - 增强版本
