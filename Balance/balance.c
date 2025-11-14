@@ -137,12 +137,12 @@ void Balance_task(void *pvParameters)
         // 获取编码器数据
         Get_Velocity_Form_Encoder();           		
 
-        // 每10秒打印一次其他小车信息
-        uint32_t current_time = HAL_GetTick();
-        if (control_debug_count % 100 == 0) {
-            Print_Other_Cars_Info();
-            last_other_cars_print = current_time;
-        }
+        // // 每10秒打印一次其他小车信息
+        // uint32_t current_time = HAL_GetTick();
+        // if (control_debug_count % 100 == 0) {
+        //     Print_Other_Cars_Info();
+        //     last_other_cars_print = current_time;
+        // }
 
         // 新的控制逻辑：编队模式具有最高优先级
         if(Formation_mode > 0) {
