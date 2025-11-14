@@ -104,10 +104,6 @@ uint8_t Should_Process_Car_Info(const char* car_id)
 {
     // 如果拓扑功能未启用，处理所有小车信息
     if(!topology_enabled) {
-        char debug_msg[128];
-        snprintf(debug_msg, sizeof(debug_msg), 
-                 "[拓扑] 拓扑功能未启用，允许接收 %s 的信息\r\n", car_id);
-        debug_print(debug_msg);
         return 1;
     }
     
@@ -1155,13 +1151,13 @@ void ESP8266_Process(void)
         if(ipd_count > 1) {
             
             // 使用多包处理函数
+            debug_print("多包处理-------\r\n");
             Process_Multiple_IPD_Packets(data_start, data_length);
         } else {
             // 原有的单包处理逻辑
+            debug_print("单包处理-------\r\n");
             char* ipd_ptr = strstr(data_start, "+IPD");
             if(ipd_ptr != NULL) {
-                debug_print("[WiFi] 检测到+IPD格式数据\r\n");
-                
                 int link_id = 0;
                 int data_len = 0;
                 
@@ -1196,8 +1192,7 @@ void ESP8266_Process(void)
                         debug_print("[WiFi] 未找到冒号分隔符\r\n");
                     }
                 } else {
-                    debug_print("[WiFi] 解析+IPD格式失败，尝试备用解析\r\n");
-                    
+                    debug_print("[WiFi] 解析+IPD格式失败，尝试备用解析\r\n");                   
                     // 备用解析：手动解析+IPD格式
                     char* comma1 = strchr(ipd_ptr, ',');
                     if(comma1 != NULL) {
@@ -1225,33 +1220,7 @@ void ESP8266_Process(void)
                         }
                     }
                 }
-            }
-            // 检查是否为直接的编队指令（没有+IPD前缀）
-            else if(strstr(data_start, "FORMATION:") != NULL) {
-                // debug_print("[WiFi] 检测到直接编队指令\r\n");
-                Process_Formation_Command(data_start);
-            }
-            // 检查是否为直接的精简合并广播格式 (以'['开头)
-            else if(data_start[0] == '[') {
-                // debug_print("[WiFi] 检测到直接的精简合并广播格式\r\n");
-                Process_Compact_Broadcast(data_start);
-            }
-            // 检查是否为JSON格式 (以'{'开头)
-            else if(data_start[0] == '{') {
-                // debug_print("[WiFi] 检测到JSON格式数据\r\n");
-                Process_Broadcast_Data(data_start);
-            }
-            // 检查控制命令
-            else if(strstr(data_start, "CTRL:") != NULL) {
-                // debug_print("[WiFi] 检测到控制命令\r\n");
-                Process_Control_Command(data_start);
-            }
-            // 检查拓扑指令
-            else if(strstr(data_start, "TOPOLOGY") != NULL) {
-                // debug_print("[WiFi] 检测到拓扑指令\r\n");
-                Process_Topology_Command(data_start);
-            }
-            else {
+            }else {
                 debug_print("[WiFi] 未知数据格式\r\n");
                 
                 // 对于未知数据，尝试多种解析方式
@@ -1269,7 +1238,7 @@ void ESP8266_Process(void)
                 }
                 
                 // 2. 尝试作为广播数据处理
-                Process_Broadcast_Data(data_start);
+                Process_Broadcast_Data(data_start); 
             }
         }
         

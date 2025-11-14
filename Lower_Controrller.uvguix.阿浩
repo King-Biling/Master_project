@@ -83,8 +83,8 @@
       <flags>2</flags>
       <showCmd>3</showCmd>
       <MinPosition>
-        <xPos>-1</xPos>
-        <yPos>-1</yPos>
+        <xPos>-32000</xPos>
+        <yPos>-32000</yPos>
       </MinPosition>
       <MaxPosition>
         <xPos>-1</xPos>
@@ -3570,7 +3570,7 @@
       </Doc>
       <Doc>
         <Name>.\HARDWARE\esp8266_driver.c</Name>
-        <ColumnNumber>28</ColumnNumber>
+        <ColumnNumber>48</ColumnNumber>
         <TopLine>861</TopLine>
         <CurrentLine>896</CurrentLine>
         <Folding>1</Folding>
