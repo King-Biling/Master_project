@@ -167,11 +167,11 @@ void Formation_Follower_Control(void)
     // 计算在领航者坐标系下的目标位置
     float leader_rad = leader_info->yaw * PI / 180.0f;
     
-    float target_x_world = leader_info->position_x + 
+    float target_x_world = leader_info->position_x +              // 目标位置在领航者坐标系下的x坐标
                           Formation_offset_x * cosf(leader_rad) - 
                           Formation_offset_y * sinf(leader_rad);
     
-    float target_y_world = leader_info->position_y + 
+    float target_y_world = leader_info->position_y +              // 目标位置在领航者坐标系下的y坐标
                           Formation_offset_x * sinf(leader_rad) + 
                           Formation_offset_y * cosf(leader_rad);
     
